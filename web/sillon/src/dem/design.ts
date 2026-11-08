@@ -47,10 +47,10 @@ export const fieldWindow = (
   for (const i of cells) {
     const col = i % g.width;
     const row = (i - col) / g.width;
-    c0 = Math.min(c0, col);
-    c1 = Math.max(c1, col);
-    r0 = Math.min(r0, row);
-    r1 = Math.max(r1, row);
+    if (col < c0) c0 = col;
+    if (col > c1) c1 = col;
+    if (row < r0) r0 = row;
+    if (row > r1) r1 = row;
   }
   const width = c1 - c0 + 1;
   const height = r1 - r0 + 1;
@@ -160,7 +160,8 @@ export const robustFit = (w: FieldWindow): PlaneFit | null => {
       y,
       z,
       (i) =>
-        valid(i) && Math.abs(g.data[i] - planeHeight(first, x(i), y(i))) <= limit,
+        valid(i) &&
+        Math.abs(g.data[i] - planeHeight(first, x(i), y(i))) <= limit,
     ) ?? first
   );
 };
@@ -244,42 +245,50 @@ export const designPlane = (
       };
 };
 
-/** Existing minus design height at each cell inside with a height. */
-const residuals = (w: FieldWindow, p: DesignPlane): Float64Array => {
+/** Existing minus design height at each cell inside with a height, and their range. */
+const residuals = (w: FieldWindow, p: DesignPlane) => {
   const { grid: g, inside } = w;
   const out = new Float64Array(g.data.length);
   let n = 0;
+  let min = Infinity;
+  let max = -Infinity;
   for (let row = 0, i = 0; row < g.height; row++) {
     const y = cellY(g, row);
     for (let col = 0; col < g.width; col++, i++) {
       const z = g.data[i];
-      if (inside[i] && !Number.isNaN(z))
-        out[n++] = z - designHeight(p, cellX(g, col), y);
+      if (!inside[i] || Number.isNaN(z)) continue;
+      const d = z - designHeight(p, cellX(g, col), y);
+      out[n++] = d;
+      if (d < min) min = d;
+      if (d > max) max = d;
     }
   }
-  return out.subarray(0, n);
+  return { r: out.subarray(0, n), min, max };
 };
 
 const BINS = 1024;
 /** Bins this small are sorted outright. */
 const SORT_AT = 4096;
 
+const binOf = (v: number, lo: number, scale: number) =>
+  Math.min(BINS - 1, Math.floor((v - lo) * scale));
+
 /**
  * The shift δ of the design for which cut = ratio × fill, with r the
- * residuals (existing − design): Σ max(r − δ, 0) = ratio · Σ max(δ − r, 0).
- * Cut falls and fill grows with δ, so the root is unique, inside one linear
- * piece between two sorted residuals. Sorting a million residuals costs
- * ~130 ms, so histograms narrow the root to one bin in linear passes and
- * only that bin is sorted to solve the piece exactly.
+ * residuals (existing − design) spanning [min, max]:
+ * Σ max(r − δ, 0) = ratio · Σ max(δ − r, 0). Cut falls and fill grows with
+ * δ, so the root is unique, inside one linear piece between two sorted
+ * residuals. Sorting a million residuals takes over 100 ms, so histograms
+ * narrow the root to one bin in linear passes and only that bin is sorted
+ * to solve its piece exactly.
  */
-const balanceShift = (r: Float64Array, ratio: number): number => {
+const balanceShift = (
+  r: Float64Array,
+  min: number,
+  max: number,
+  ratio: number,
+): number => {
   if (r.length === 0) return 0;
-  let min = Infinity;
-  let max = -Infinity;
-  for (const v of r) {
-    if (v < min) min = v;
-    if (v > max) max = v;
-  }
   if (ratio === 0) return max;
   if (ratio === Infinity) return min;
   // Weighted as wc·cut = wf·fill, which no finite ratio can overflow.
@@ -293,15 +302,20 @@ const balanceShift = (r: Float64Array, ratio: number): number => {
   let bin = r;
   // A few levels reach a small bin on any real field; the cap bounds the
   // passes when a spike crowds everything else into one bin level after level.
-  for (let level = 0; bin.length > SORT_AT && max > min && level < 8; level++) {
+  for (let level = 0; bin.length > SORT_AT && level < 8; level++) {
     const scale = BINS / (max - min);
+    // All equal, or too close together to bin: sort what is left.
+    if (!(scale < Infinity)) break;
     const lo = min;
-    const binOf = (v: number) => Math.min(BINS - 1, Math.floor((v - lo) * scale));
     const count = new Uint32Array(BINS);
     const sum = new Float64Array(BINS);
     let total = 0;
-    for (const v of bin) {
-      const b = binOf(v);
+    // Indexed: `for…of` over a typed array runs several times slower until
+    // the JIT warms up, and this pass sees every cell of the field.
+    // eslint-disable-next-line @typescript-eslint/prefer-for-of
+    for (let i = 0; i < bin.length; i++) {
+      const v = bin[i];
+      const b = binOf(v, lo, scale);
       count[b]++;
       sum[b] += v;
       total += v;
@@ -329,9 +343,9 @@ const balanceShift = (r: Float64Array, ratio: number): number => {
     const next = new Float64Array(count[pick]);
     min = Infinity;
     max = -Infinity;
-    let j = 0;
-    for (const v of bin) {
-      if (binOf(v) !== pick) continue;
+    for (let i = 0, j = 0; i < bin.length; i++) {
+      const v = bin[i];
+      if (binOf(v, lo, scale) !== pick) continue;
       next[j++] = v;
       if (v < min) min = v;
       if (v > max) max = v;
@@ -349,10 +363,34 @@ const balanceShift = (r: Float64Array, ratio: number): number => {
     const d =
       (wc * (sHi + sAll - sBin) + wf * (sLo + sBin)) /
       (wc * (nHi + bin.length - j) + wf * (nLo + j));
-    if (j === bin.length || d <= bin[j]) return j > 0 ? Math.max(d, bin[j - 1]) : d;
+    if (j === bin.length || d <= bin[j])
+      return j > 0 ? Math.max(d, bin[j - 1]) : d;
     sBin += bin[j];
   }
   return 0;
+};
+
+/**
+ * At ratio 0 (Infinity) the shift lays the design exactly on the highest
+ * (lowest) cell, but adding it to z0 rounds, which can leave that cell
+ * 1e-16 m on the wrong side as `earthworks` recomputes it: a sliver of cut
+ * (fill) that makes the ratio finite and puts the haul's end on it. Moves
+ * the design `up` (or down) past it, a few units in the last place at a
+ * time and doubling, until no cell is left on the wrong side.
+ */
+const clearExtreme = (
+  w: FieldWindow,
+  plane: DesignPlane,
+  up: boolean,
+): DesignPlane => {
+  let z0 = plane.z0;
+  for (let step = 1; step <= 64; step++) {
+    const { min, max } = residuals(w, { ...plane, z0 });
+    const over = up ? max : -min;
+    if (!(over > 0)) break;
+    z0 += (up ? 1 : -1) * (over + Math.abs(z0) * Number.EPSILON) * 2 ** step;
+  }
+  return { ...plane, z0 };
 };
 
 /**
@@ -369,9 +407,15 @@ export const balance = (
 ): DesignPlane => {
   if (!(ratio >= 0))
     throw new RangeError(`cut:fill ratio must be 0 or more, got ${ratio}`);
-  const r = residuals(w, plane);
+  const { r, min, max } = residuals(w, plane);
   if (r.length === 0) return plane;
-  return { ...plane, z0: plane.z0 + balanceShift(r, ratio) };
+  const shifted = {
+    ...plane,
+    z0: plane.z0 + balanceShift(r, min, max, ratio),
+  };
+  return ratio === 0 || ratio === Infinity
+    ? clearExtreme(w, shifted, ratio === 0)
+    : shifted;
 };
 
 /** Earth moved to bring the field to a design. Volumes in ground m³. */
@@ -468,7 +512,10 @@ export const earthworks = (
     m3PerHa: w.areaM2 > 0 ? cutM3 / (w.areaM2 / 1e4) : 0,
     haulM:
       cut > 0 && fill > 0
-        ? (Math.hypot(cutCol / cut - fillCol / fill, cutRow / cut - fillRow / fill) *
+        ? (Math.hypot(
+            cutCol / cut - fillCol / fill,
+            cutRow / cut - fillRow / fill,
+          ) *
             g.cellSize) /
           w.k
         : 0,
@@ -516,4 +563,68 @@ export const design = (
     works: earthworks(w, plane, onGradeM),
     fall: planeFall(plane, w.k),
   };
+};
+
+/** Directions the haul estimate projects on (spread over 180°). */
+const HAUL_DIRECTIONS = 8;
+
+/**
+ * A lower bound on the mean haul, in ground metres: the largest, over
+ * eight directions, of the one-dimensional transport distance
+ * (Wasserstein-1) between the cut and the fill projected on that direction,
+ * each scaled to unit volume. The centroid distance (`haulM`) collapses to
+ * zero when cut and fill interleave, as they always do around a best-fit
+ * plane, yet the soil still travels from each hump to the nearby dips; this
+ * does not. Any true assignment of cut to fill hauls at least this far on
+ * average, so the instrument reads it as "≥".
+ */
+export const transportHaulM = (w: FieldWindow, depth: Float32Array): number => {
+  const g = w.grid;
+  const cs = g.cellSize;
+  let cut = 0;
+  let fill = 0;
+  for (const v of depth) {
+    if (v > 0) cut += v;
+    else if (v < 0) fill -= v;
+  }
+  if (!(cut > 0) || !(fill > 0)) return 0;
+  const W = g.width * cs;
+  const H = g.height * cs;
+  let best = 0;
+  for (let k = 0; k < HAUL_DIRECTIONS; k++) {
+    const a = (k * Math.PI) / HAUL_DIRECTIONS;
+    const ux = Math.cos(a);
+    const uy = Math.sin(a);
+    // Window-relative coordinates: x to the east, y up (rows run south).
+    const corners = [0, W * ux, -H * uy, W * ux - H * uy];
+    const lo = Math.min(...corners);
+    const n = Math.ceil((Math.max(...corners) - lo) / cs) + 2;
+    const hc = new Float64Array(n);
+    const hf = new Float64Array(n);
+    for (let row = 0, i = 0; row < g.height; row++) {
+      const y = -(row + 0.5) * cs;
+      for (let col = 0; col < g.width; col++, i++) {
+        const v = depth[i];
+        if (!(v > 0 || v < 0)) continue; // zero or NaN
+        // Cloud-in-cell: split the volume between the two nearest bins.
+        const t = ((col + 0.5) * cs * ux + y * uy - lo) / cs;
+        const b = Math.floor(t);
+        const f = t - b;
+        const h = v > 0 ? hc : hf;
+        const m = Math.abs(v);
+        h[b] += m * (1 - f);
+        h[b + 1] += m * f;
+      }
+    }
+    let cc = 0;
+    let cf = 0;
+    let w1 = 0;
+    for (let b = 0; b < n; b++) {
+      cc += hc[b] / cut;
+      cf += hf[b] / fill;
+      w1 += Math.abs(cc - cf);
+    }
+    best = Math.max(best, w1 * cs);
+  }
+  return best / w.k;
 };

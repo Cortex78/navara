@@ -1,92 +1,127 @@
-/* GAïa · Sillon. Layout: hairline top bar, map stage left, instrument
-   panel right (bottom sheet on phones), status bar under both; a dot grid
-   on every surface. GAïa night first, a daylight variant for the field. */
+/* GAïa · Sillon. Layout: command strip on top, map stage left,
+   instrument rail right (bottom sheet on phones), readout dock below; a dot
+   lattice on every surface. GAïa night first; bone daylight variant.
+   Laws: signal blue is emitted light (active, focus, the selected field);
+   ember is a density reading only; alert red is rationed and always
+   travels with a word. */
 :root {
-  --night: #04041a;
+  --ground: #06061a;
   --deck: #06061a;
-  --deck-glass: rgb(6 6 26 / 0.86);
+  --deck-glass: rgb(6 6 26 / 0.94);
   --well: #0b0b2e;
-  --ridge: #2b2b5e;
-  --bone: #ece8dc;
-  --bone-2: #c4c1b2;
+  --well-off: #0d0d2e;
+  --ghost: rgb(236 232 220 / 0.04);
+  --ghost-hover: rgb(236 232 220 / 0.1);
+  --ink: #ece8dc;
+  --ink-2: #c4c1b2;
+  --read: #a9a69b;
+  --prose: #9b9889;
   --slate: #7b7a99;
+  --dim: #55546e;
   --line: rgb(236 232 220 / 0.1);
-  --line-2: rgb(236 232 220 / 0.18);
+  --line-2: rgb(236 232 220 / 0.16);
   --line-3: rgb(236 232 220 / 0.32);
-  --dot: rgb(236 232 220 / 0.055);
-  --cobalt: #3c62ff;
-  --cobalt-fill: #3c62ff;
-  --cobalt-deep: #1e1ea8;
-  --cobalt-text: #7c9aff;
-  --cobalt-glow: rgb(60 98 255 / 0.32);
-  --on-cobalt: #ffffff;
-  --signal: #ff6b26;
-  --signal-text: #ff9a66;
+  --dot: rgb(236 232 220 / 0.035);
+  --ultra: #1e1ea8;
+  --ultra-hover: #2727c8;
+  --signal: #3c62ff;
+  --signal-text: #7c9aff;
+  --signal-glow: rgb(60 98 255 / 0.55);
+  --signal-wash: rgb(30 30 168 / 0.14);
+  --on-signal: #ffffff;
+  --alert: #ff4a3c;
+  --ember-text: #ff9a66;
   --phosphor: #3ce0a0;
-  --scrim: rgb(4 4 26 / 0.72);
-  --shadow: 0 18px 44px rgb(0 0 0 / 0.55);
-  --icon-filter: invert(0.92) sepia(0.12);
-  --display: "Chakra Petch", "Oswald", "Arial Narrow", system-ui, sans-serif;
+  --cyan-text: #59d8ff;
+  --led-off: #2b2b5e;
+  --veil: rgb(2 2 12 / 0.78);
+  --shadow: 0 14px 44px rgb(0 0 0 / 0.6);
+  --icon-filter: invert(0.9) sepia(0.15);
+  --reticle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='25' height='25'%3E%3Cg stroke='%23060618' stroke-width='3' opacity='.75'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Cg stroke='%23dce3f2' stroke-width='1'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Ccircle cx='12.5' cy='12.5' r='1.6' fill='%23dce3f2'/%3E%3C/svg%3E")
+    12 12;
+  --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --panel-w: 368px;
+  --oracular: "Newsreader", "Cormorant Garamond", Georgia, serif;
+  --cuneiform: "Noto Sans Cuneiform", serif;
+  --panel-w: 344px;
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --night: #eceef4;
-    --deck: #f6f7fa;
-    --deck-glass: rgb(246 247 250 / 0.9);
-    --well: #ffffff;
-    --ridge: #c9cfdd;
-    --bone: #0d1220;
-    --bone-2: #2c3348;
-    --slate: #4f5a78;
-    --line: rgb(13 18 32 / 0.12);
-    --line-2: rgb(13 18 32 / 0.2);
-    --line-3: rgb(13 18 32 / 0.36);
-    --dot: rgb(13 18 32 / 0.07);
-    --cobalt: #2741e8;
-    --cobalt-fill: #2741e8;
-    --cobalt-deep: #1e1ea8;
-    --cobalt-text: #1f35c4;
-    --cobalt-glow: rgb(39 65 232 / 0.18);
-    --on-cobalt: #ffffff;
-    --signal: #c2470b;
-    --signal-text: #a63a07;
-    --phosphor: #08694a;
-    --scrim: rgb(236 238 244 / 0.78);
-    --shadow: 0 14px 36px rgb(13 18 32 / 0.16);
+    --ground: #e3decf;
+    --deck: #ece8dc;
+    --deck-glass: rgb(236 232 220 / 0.95);
+    --well: #f6f3ec;
+    --well-off: #e3decf;
+    --ghost: rgb(11 11 46 / 0.035);
+    --ghost-hover: rgb(11 11 46 / 0.09);
+    --ink: #101030;
+    --ink-2: #2e2e4a;
+    --read: #2e2e4a;
+    --prose: #4f4c45;
+    --slate: #5a5a74;
+    --dim: #8a8678;
+    --line: rgb(11 11 46 / 0.12);
+    --line-2: rgb(11 11 46 / 0.2);
+    --line-3: rgb(11 11 46 / 0.34);
+    --dot: rgb(11 11 46 / 0.05);
+    --ultra: #1e1ea8;
+    --ultra-hover: #2727c8;
+    --signal: #3c62ff;
+    --signal-text: #1e1ea8;
+    --signal-glow: rgb(60 98 255 / 0.35);
+    --signal-wash: rgb(30 30 168 / 0.08);
+    --on-signal: #ffffff;
+    --alert: #b3261e;
+    --ember-text: #a63a07;
+    --phosphor: #0b6e4c;
+    --cyan-text: #0b5d80;
+    --led-off: #c9c5b6;
+    --veil: rgb(227 222 207 / 0.8);
+    --shadow: 0 12px 34px rgb(11 11 46 / 0.18);
     --icon-filter: none;
+    --reticle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='25' height='25'%3E%3Cg stroke='%23ece8dc' stroke-width='3' opacity='.85'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Cg stroke='%23101030' stroke-width='1'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Ccircle cx='12.5' cy='12.5' r='1.6' fill='%23101030'/%3E%3C/svg%3E")
+      12 12;
     color-scheme: light;
   }
 }
 
 :root[data-theme="light"] {
-  --night: #eceef4;
-  --deck: #f6f7fa;
-  --deck-glass: rgb(246 247 250 / 0.9);
-  --well: #ffffff;
-  --ridge: #c9cfdd;
-  --bone: #0d1220;
-  --bone-2: #2c3348;
-  --slate: #4f5a78;
-  --line: rgb(13 18 32 / 0.12);
-  --line-2: rgb(13 18 32 / 0.2);
-  --line-3: rgb(13 18 32 / 0.36);
-  --dot: rgb(13 18 32 / 0.07);
-  --cobalt: #2741e8;
-  --cobalt-fill: #2741e8;
-  --cobalt-deep: #1e1ea8;
-  --cobalt-text: #1f35c4;
-  --cobalt-glow: rgb(39 65 232 / 0.18);
-  --on-cobalt: #ffffff;
-  --signal: #c2470b;
-  --signal-text: #a63a07;
-  --phosphor: #08694a;
-  --scrim: rgb(236 238 244 / 0.78);
-  --shadow: 0 14px 36px rgb(13 18 32 / 0.16);
+  --ground: #e3decf;
+  --deck: #ece8dc;
+  --deck-glass: rgb(236 232 220 / 0.95);
+  --well: #f6f3ec;
+  --well-off: #e3decf;
+  --ghost: rgb(11 11 46 / 0.035);
+  --ghost-hover: rgb(11 11 46 / 0.09);
+  --ink: #101030;
+  --ink-2: #2e2e4a;
+  --read: #2e2e4a;
+  --prose: #4f4c45;
+  --slate: #5a5a74;
+  --dim: #8a8678;
+  --line: rgb(11 11 46 / 0.12);
+  --line-2: rgb(11 11 46 / 0.2);
+  --line-3: rgb(11 11 46 / 0.34);
+  --dot: rgb(11 11 46 / 0.05);
+  --ultra: #1e1ea8;
+  --ultra-hover: #2727c8;
+  --signal: #3c62ff;
+  --signal-text: #1e1ea8;
+  --signal-glow: rgb(60 98 255 / 0.35);
+  --signal-wash: rgb(30 30 168 / 0.08);
+  --on-signal: #ffffff;
+  --alert: #b3261e;
+  --ember-text: #a63a07;
+  --phosphor: #0b6e4c;
+  --cyan-text: #0b5d80;
+  --led-off: #c9c5b6;
+  --veil: rgb(227 222 207 / 0.8);
+  --shadow: 0 12px 34px rgb(11 11 46 / 0.18);
   --icon-filter: none;
+  --reticle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='25' height='25'%3E%3Cg stroke='%23ece8dc' stroke-width='3' opacity='.85'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Cg stroke='%23101030' stroke-width='1'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Ccircle cx='12.5' cy='12.5' r='1.6' fill='%23101030'/%3E%3C/svg%3E")
+    12 12;
   color-scheme: light;
 }
 
@@ -111,12 +146,17 @@ body {
 }
 
 body {
-  background: var(--night);
-  color: var(--bone);
-  font: 12.5px/1.5 var(--mono);
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 12px/1.5 var(--mono);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--ultra);
+  color: #ffffff;
 }
 
 .sr {
@@ -128,9 +168,11 @@ body {
   white-space: nowrap;
 }
 
+/* Focus is signal light: 2 px ring, 3 px off, with its glow. Never removed. */
 :focus-visible {
-  outline: 1px solid var(--cobalt-text);
-  outline-offset: 2px;
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+  box-shadow: 0 0 10px var(--signal-glow);
 }
 
 /* ── Frame ───────────────────────────────────────────────────────────── */
@@ -155,6 +197,15 @@ body.panel-off .gx-panel {
   display: none;
 }
 
+/* Lattice: the fine dot texture under every GAïa surface. */
+.gx-lattice,
+.gx-topbar,
+.gx-statusbar,
+.gx-panel {
+  background-image: radial-gradient(var(--dot) 1px, transparent 1.4px);
+  background-size: 9px 9px;
+}
+
 /* Corner brackets: the GAïa frame for anything that floats over the map. */
 .gx-frame {
   --frame-c: var(--line-3);
@@ -168,74 +219,113 @@ body.panel-off .gx-panel {
       1px no-repeat,
     linear-gradient(var(--frame-c), var(--frame-c)) top right / 1px
       var(--frame-l) no-repeat,
-    linear-gradient(var(--frame-c), var(--frame-c)) bottom left /
-      var(--frame-l) 1px no-repeat,
+    linear-gradient(var(--frame-c), var(--frame-c)) bottom left / var(--frame-l)
+      1px no-repeat,
     linear-gradient(var(--frame-c), var(--frame-c)) bottom left / 1px
       var(--frame-l) no-repeat,
     linear-gradient(var(--frame-c), var(--frame-c)) bottom right /
       var(--frame-l) 1px no-repeat,
     linear-gradient(var(--frame-c), var(--frame-c)) bottom right / 1px
       var(--frame-l) no-repeat,
-    radial-gradient(var(--dot) 1px, transparent 1.2px) 0 0 / 12px 12px,
+    radial-gradient(var(--dot) 1px, transparent 1.4px) 0 0 / 9px 9px,
     var(--deck-glass);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   box-shadow: var(--shadow);
 }
 
-/* ── Top bar ─────────────────────────────────────────────────────────── */
+/* ── Command strip (top bar) ─────────────────────────────────────────── */
 
 .gx-topbar {
   grid-area: top;
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 18px;
-  min-height: 50px;
-  padding-block: 6px;
-  padding-left: max(14px, env(safe-area-inset-left, 0px));
-  padding-right: max(14px, env(safe-area-inset-right, 0px));
-  background: var(--deck);
-  border-bottom: 1px solid var(--cobalt-deep);
+  gap: 14px;
+  min-height: 44px;
+  padding-block: 4px;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  background-color: var(--deck-glass);
+  border-bottom: 1px solid var(--line-2);
   z-index: 4;
+}
+
+/* The glow seam under the strip. */
+.gx-topbar::after,
+.gx-statusbar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--signal);
+  opacity: 0.3;
+  box-shadow: 0 0 8px var(--signal-glow);
+  pointer-events: none;
+}
+
+.gx-topbar::after {
+  bottom: -1px;
 }
 
 .gx-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-right: 18px;
+  gap: 11px;
+  padding-right: 14px;
   border-right: 1px solid var(--line);
   min-width: 0;
 }
 
+/* Emblem: a chamfered square holding a breathing signal core. */
 .gx-mark {
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   display: grid;
   place-items: center;
   border: 1px solid var(--line-3);
+  clip-path: polygon(0 0, 100% 0, 100% 78%, 78% 100%, 0 100%);
 }
 
 .gx-mark::after {
   content: "";
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--cobalt);
-  box-shadow: 0 0 10px var(--cobalt-glow);
+  background: var(--signal);
+  box-shadow: 0 0 10px var(--signal-glow);
+  animation: gx-core 2.6s ease-in-out infinite;
 }
 
+@keyframes gx-core {
+  0%,
+  100% {
+    filter: brightness(1);
+    opacity: 0.85;
+  }
+
+  50% {
+    filter: brightness(1.45);
+    opacity: 1;
+  }
+}
+
+/* The wordmark is typed as GAÏA by hand: no text-transform (spelling law). */
 .gx-wordmark {
-  font: 600 14px/1.1 var(--display);
-  letter-spacing: 0.26em;
-  text-transform: uppercase;
+  font: 600 12px/1.1 var(--display);
+  letter-spacing: 0.22em;
   white-space: nowrap;
 }
 
+.gx-wordmark .gx-sep {
+  color: var(--slate);
+}
+
 .gx-sub {
-  margin-top: 4px;
-  font: 500 9.5px/1.2 var(--mono);
-  letter-spacing: 0.18em;
+  margin-top: 3px;
+  font: 500 8.5px/1.2 var(--mono);
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--slate);
   white-space: nowrap;
@@ -248,18 +338,18 @@ body.panel-off .gx-panel {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .gx-status {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
-  font: 600 10.5px/1 var(--display);
-  letter-spacing: 0.2em;
+  font: 600 9.5px/1 var(--mono);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--bone-2);
+  color: var(--ink-2);
   white-space: nowrap;
 }
 
@@ -270,11 +360,11 @@ body.panel-off .gx-panel {
 
 .gx-status i {
   flex: none;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--cobalt);
-  box-shadow: 0 0 8px var(--cobalt-glow);
+  background: var(--signal);
+  box-shadow: 0 0 8px var(--signal-glow);
 }
 
 .gx-status[data-state="live"] i {
@@ -284,28 +374,31 @@ body.panel-off .gx-panel {
 
 .gx-status[data-state="busy"] i {
   background: var(--phosphor);
-  animation: gx-pulse 1.1s ease-in-out infinite;
+  box-shadow: 0 0 8px var(--phosphor);
+  animation: gx-pulse 1.6s ease-in-out infinite;
 }
 
 .gx-status[data-state="error"] i {
-  background: var(--signal);
-  box-shadow: 0 0 8px var(--signal);
+  background: var(--alert);
+  box-shadow: 0 0 8px var(--alert);
+}
+
+.gx-status[data-state="error"] {
+  color: var(--alert);
 }
 
 @keyframes gx-pulse {
   50% {
-    opacity: 0.25;
-    transform: scale(0.7);
+    opacity: 0.3;
   }
 }
 
 .gx-datum {
-  padding-left: 16px;
+  padding-left: 14px;
   border-left: 1px solid var(--line);
-  font: 500 10px/1 var(--mono);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--slate);
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.14em;
+  color: var(--read);
   white-space: nowrap;
 }
 
@@ -319,8 +412,8 @@ body.panel-off .gx-panel {
 .gx-ico {
   position: relative;
   flex: none;
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
 }
 
 .gx-ico-fs {
@@ -331,10 +424,8 @@ body.panel-off .gx-panel {
     linear-gradient(currentColor, currentColor) top right / 1px 4px no-repeat,
     linear-gradient(currentColor, currentColor) bottom left / 4px 1px no-repeat,
     linear-gradient(currentColor, currentColor) bottom left / 1px 4px no-repeat,
-    linear-gradient(currentColor, currentColor) bottom right / 4px 1px
-      no-repeat,
-    linear-gradient(currentColor, currentColor) bottom right / 1px 4px
-      no-repeat;
+    linear-gradient(currentColor, currentColor) bottom right / 4px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) bottom right / 1px 4px no-repeat;
 }
 
 .gx-ico-panel {
@@ -346,60 +437,64 @@ body.panel-off .gx-panel {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: 3px;
+  right: 2px;
   width: 1px;
   background: currentColor;
 }
 
 /* ── Controls ────────────────────────────────────────────────────────── */
 
+/* Ghost button: the default square control. Hover is instant. */
 .gx-btn,
 .gx-seg button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 8px 12px;
-  font: 600 10.5px/1.15 var(--display);
-  letter-spacing: 0.16em;
+  gap: 7px;
+  min-height: 32px;
+  padding: 7px 10px;
+  font: 600 9.5px/1.2 var(--mono);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   text-align: center;
-  color: var(--bone);
-  background: var(--well);
+  color: var(--ink-2);
+  background: var(--ghost);
   border: 1px solid var(--line-2);
   border-radius: 0;
   cursor: pointer;
-  transition:
-    border-color 0.15s,
-    background-color 0.15s,
-    color 0.15s,
-    box-shadow 0.15s;
 }
 
 .gx-btn:hover,
 .gx-seg button:hover {
-  border-color: var(--cobalt);
+  background: var(--ghost-hover);
+  border-color: var(--line-3);
+  color: var(--ink);
 }
 
-.gx-btn:active {
-  background: var(--deck);
-}
-
+/* Switched on: a solid signal block that emits light. */
 .gx-btn[aria-pressed="true"],
 .gx-seg button.on,
-.gx-seg button[aria-pressed="true"],
+.gx-seg button[aria-pressed="true"] {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--on-signal);
+  box-shadow: 0 0 12px var(--signal-glow);
+}
+
+/* The one dominant action: ultramarine with its own light. */
 .gx-btn-primary {
-  background: var(--cobalt-fill);
-  border-color: var(--cobalt);
-  color: var(--on-cobalt);
+  background: var(--ultra);
+  border-color: rgb(60 98 255 / 0.55);
+  color: #ece8dc;
   box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 0.14),
-    0 0 18px var(--cobalt-glow);
+    inset 0 0 0 1px rgb(60 98 255 / 0.22),
+    0 0 16px rgb(30 30 168 / 0.5);
 }
 
 .gx-btn-primary:hover {
-  border-color: var(--cobalt-text);
+  background: var(--ultra-hover);
+  border-color: rgb(60 98 255 / 0.85);
+  color: #ffffff;
 }
 
 .gx-btn-quiet {
@@ -407,27 +502,29 @@ body.panel-off .gx-panel {
 }
 
 .gx-btn-icon {
-  min-width: 34px;
+  min-width: 32px;
   padding-inline: 0;
-  font-size: 15px;
+  font-size: 14px;
   letter-spacing: 0;
 }
 
 .gx-btn:disabled,
 .gx-seg button:disabled {
-  opacity: 0.42;
-  cursor: not-allowed;
+  color: var(--dim);
+  background: var(--well-off);
+  border-color: var(--line);
   box-shadow: none;
+  cursor: not-allowed;
 }
 
 .gx-link {
   padding: 0;
   border: 0;
   background: none;
-  font: 600 10px/1 var(--display);
-  letter-spacing: 0.16em;
+  font: 600 9px/1 var(--mono);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--cobalt-text);
+  color: var(--signal-text);
   cursor: pointer;
 }
 
@@ -442,11 +539,11 @@ body.panel-off .gx-panel {
 }
 
 .gx-seg button {
-  padding-inline: 6px;
+  padding-inline: 5px;
 }
 
 .gx-label {
-  font: 600 10px/1.2 var(--display);
+  font: 600 8.5px/1.3 var(--mono);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--slate);
@@ -456,7 +553,7 @@ body.panel-off .gx-panel {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 6px 10px;
+  gap: 5px 10px;
 }
 
 .gx-row > :last-child {
@@ -469,8 +566,8 @@ body.panel-off .gx-panel {
 }
 
 output {
-  font: 500 11.5px/1 var(--mono);
-  color: var(--bone);
+  font: 500 10.5px/1 var(--mono);
+  color: var(--read);
 }
 
 select,
@@ -478,10 +575,10 @@ input[type="search"],
 input[type="text"],
 input[type="number"] {
   width: 100%;
-  min-height: 34px;
-  padding: 7px 10px;
-  font: 500 12px/1.2 var(--mono);
-  color: var(--bone);
+  min-height: 32px;
+  padding: 6px 8px;
+  font: 500 11px/1.2 var(--mono);
+  color: var(--ink);
   background: var(--well);
   border: 1px solid var(--line-2);
   border-radius: 0;
@@ -492,37 +589,42 @@ input:hover {
   border-color: var(--line-3);
 }
 
-input[type="number"] {
-  font-variant-numeric: tabular-nums;
+input::placeholder {
+  color: var(--slate);
 }
 
 input[type="range"] {
   width: 100%;
   margin: 2px 0;
-  accent-color: var(--cobalt);
+  accent-color: var(--signal);
 }
 
-/* Dot toggles: a checkbox drawn as a status light. */
+/* LED toggle: a ghost button whose state is the light, not the label. */
 .gx-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .gx-chip {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  min-height: 34px;
-  padding: 7px 11px;
-  font: 600 10.5px/1 var(--display);
-  letter-spacing: 0.16em;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 10px;
+  font: 600 9.5px/1 var(--mono);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--bone);
+  color: var(--ink-2);
   border: 1px solid var(--line-2);
-  background: var(--well);
+  background: var(--ghost);
   cursor: pointer;
+}
+
+.gx-chip:hover {
+  background: var(--ghost-hover);
+  border-color: var(--line-3);
 }
 
 .gx-chip-wide {
@@ -532,33 +634,36 @@ input[type="range"] {
 .gx-chip input {
   appearance: none;
   flex: none;
-  width: 9px;
-  height: 9px;
+  width: 6px;
+  height: 6px;
   margin: 0;
   border-radius: 50%;
-  border: 1px solid var(--slate);
-  background: transparent;
+  border: 0;
+  background: var(--led-off);
   cursor: pointer;
 }
 
 .gx-chip input:checked {
-  border-color: var(--cobalt);
-  background: var(--cobalt);
-  box-shadow: 0 0 8px var(--cobalt-glow);
+  background: var(--signal);
+  box-shadow: 0 0 6px var(--signal);
+}
+
+.gx-chip input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .gx-chip:has(input:focus-visible) {
-  outline: 1px solid var(--cobalt-text);
-  outline-offset: 2px;
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
 }
 
 .gx-select-sm select {
   width: auto;
-  min-height: 34px;
-  padding-block: 6px;
+  min-height: 32px;
 }
 
-/* ── Panel ───────────────────────────────────────────────────────────── */
+/* ── Rail (instrument panel) ─────────────────────────────────────────── */
 
 .gx-panel {
   grid-area: panel;
@@ -566,10 +671,8 @@ input[type="range"] {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(var(--dot) 1px, transparent 1.2px) 0 0 / 14px 14px,
-    var(--deck);
-  border-left: 1px solid var(--line);
+  background-color: var(--deck-glass);
+  border-left: 1px solid var(--line-2);
   z-index: 3;
 }
 
@@ -579,18 +682,23 @@ input[type="range"] {
   overflow-y: auto;
   display: grid;
   align-content: start;
-  gap: 10px;
-  padding: 12px 14px 18px;
-  padding-right: max(14px, env(safe-area-inset-right, 0px));
+  gap: 8px;
+  padding: 10px 12px 16px;
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
 }
 
+/* Info callout: a signal-ruled note. Errors swap in alert and say so. */
 .gx-statusline {
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-left: 2px solid var(--cobalt);
-  background: var(--deck-glass);
-  font-size: 11.5px;
-  color: var(--bone-2);
+  padding: 6px 9px;
+  border-left: 2px solid rgb(60 98 255 / 0.5);
+  background: var(--signal-wash);
+  font: 400 10px/1.6 var(--mono);
+  color: var(--read);
+}
+
+.gx-statusline::before {
+  content: "ⓘ ";
+  color: var(--signal-text);
 }
 
 .gx-statusline:empty {
@@ -598,58 +706,70 @@ input[type="range"] {
 }
 
 .gx-statusline[data-kind="error"] {
-  border-left-color: var(--signal);
-  color: var(--signal-text);
+  border-left-color: var(--alert);
+  color: var(--alert);
+}
+
+.gx-statusline[data-kind="error"]::before {
+  content: "✕ Error · ";
+  color: var(--alert);
 }
 
 .gx-sec {
   border: 1px solid var(--line);
-  background: var(--deck-glass);
+  background: var(--ghost);
 }
 
+/* Section header: ▾ ■ TITLE · SUB, with a ghosted cuneiform sign. */
 .gx-sec > summary {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 10px 12px;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 9px;
   list-style: none;
   cursor: pointer;
-  font: 600 10.5px/1 var(--display);
+  font: 600 9.5px/1 var(--mono);
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--cobalt-text);
+  color: var(--signal-text);
   user-select: none;
+  border-bottom: 1px solid transparent;
+}
+
+.gx-sec[open] > summary {
+  border-bottom-color: var(--line);
+}
+
+.gx-sec > summary:hover {
+  background: var(--ghost-hover);
 }
 
 .gx-sec > summary::-webkit-details-marker {
   display: none;
 }
 
-/* ▾ caret and the ■ square of a GAïa register heading. */
 .gx-sec > summary::before {
-  content: "";
+  content: "▸";
   flex: none;
-  width: 0;
-  height: 0;
-  border-left: 3.5px solid transparent;
-  border-right: 3.5px solid transparent;
-  border-top: 5px solid var(--slate);
-  transition: transform 0.15s;
+  width: 9px;
+  font-size: 8px;
+  color: var(--signal);
 }
 
-.gx-sec:not([open]) > summary::before {
-  transform: rotate(-90deg);
+.gx-sec[open] > summary::before {
+  content: "▾";
 }
 
 .gx-sec-title::before {
   content: "";
   display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 10px;
-  vertical-align: 1px;
-  background: var(--cobalt);
+  width: 4px;
+  height: 4px;
+  margin-right: 9px;
+  vertical-align: 1.5px;
+  background: var(--signal);
+  box-shadow: 0 0 7px var(--signal-glow);
 }
 
 .gx-sec-sub {
@@ -658,23 +778,25 @@ input[type="range"] {
 
 .gx-sec-sub::before {
   content: "·";
-  margin: 0 0.7em;
-  color: var(--slate);
+  margin: 0 0.6em;
 }
 
-.gx-sec > summary:hover .gx-sec-sub {
-  color: var(--bone-2);
+.gx-cune {
+  margin-left: auto;
+  font: 400 10px/1 var(--cuneiform);
+  letter-spacing: 0;
+  color: var(--line-3);
 }
 
 .gx-sec-body {
   display: grid;
-  gap: 10px;
-  padding: 2px 12px 12px;
+  gap: 9px;
+  padding: 9px 9px 10px;
 }
 
 .gx-hint {
-  font: 400 11px/1.6 var(--mono);
-  color: var(--slate);
+  font: 400 10px/1.65 var(--mono);
+  color: var(--prose);
 }
 
 .gx-hint:empty {
@@ -687,12 +809,7 @@ input[type="range"] {
   gap: 4px;
 }
 
-.gx-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-}
-
+.gx-actions,
 .gx-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -705,19 +822,17 @@ input[type="range"] {
   gap: 4px;
 }
 
-/* The target card: a framed register with corner brackets. */
+/* The target card: the switched-on field, bracketed in signal light. */
 .gx-card {
   --frame-c: var(--signal);
   position: relative;
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 9px;
+  padding: 11px;
   border: 1px solid var(--line);
   background:
-    linear-gradient(var(--frame-c), var(--frame-c)) top left / 9px 1px
-      no-repeat,
-    linear-gradient(var(--frame-c), var(--frame-c)) top left / 1px 9px
-      no-repeat,
+    linear-gradient(var(--frame-c), var(--frame-c)) top left / 9px 1px no-repeat,
+    linear-gradient(var(--frame-c), var(--frame-c)) top left / 1px 9px no-repeat,
     linear-gradient(var(--frame-c), var(--frame-c)) top right / 9px 1px
       no-repeat,
     linear-gradient(var(--frame-c), var(--frame-c)) top right / 1px 9px
@@ -733,25 +848,25 @@ input[type="range"] {
     var(--well);
 }
 
-.gx-name {
+input.gx-name {
   min-height: 0;
   padding: 2px 0 6px;
   border: 0;
   border-bottom: 1px solid var(--line-2);
   background: transparent;
-  font: 600 15px/1.25 var(--display);
-  letter-spacing: 0.06em;
-  color: var(--bone);
+  font: 600 14px/1.25 var(--display);
+  letter-spacing: 0.08em;
+  color: var(--ink);
 }
 
-.gx-name:hover,
-.gx-name:focus {
-  border-bottom-color: var(--cobalt);
+input.gx-name:hover,
+input.gx-name:focus {
+  border-bottom-color: var(--signal);
 }
 
 .gx-crop {
-  font: 500 10px/1.4 var(--mono);
-  letter-spacing: 0.08em;
+  font: 500 9px/1.45 var(--mono);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--slate);
 }
@@ -760,7 +875,7 @@ input[type="range"] {
   display: none;
 }
 
-/* Register: label left in tracked caps, value right in mono, dotted rules. */
+/* Register: key left in tracked caps, value right, dotted rules. */
 .gx-reg {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -768,13 +883,13 @@ input[type="range"] {
 
 .gx-reg dt,
 .gx-reg dd {
-  padding: 6px 0;
+  padding: 5px 0;
   border-bottom: 1px dotted var(--line-2);
 }
 
 .gx-reg dt {
-  padding-right: 12px;
-  font: 600 9.5px/1.5 var(--display);
+  padding-right: 10px;
+  font: 600 8.5px/1.6 var(--mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--slate);
@@ -783,17 +898,17 @@ input[type="range"] {
 .gx-reg dd {
   margin: 0;
   text-align: right;
-  font: 500 11.5px/1.5 var(--mono);
-  color: var(--bone);
+  font: 500 10.5px/1.5 var(--mono);
+  color: var(--ink-2);
   overflow-wrap: anywhere;
 }
 
 .gx-reg dd[data-tone="cut"] {
-  color: var(--signal-text);
+  color: var(--ember-text);
 }
 
 .gx-reg dd[data-tone="fill"] {
-  color: var(--cobalt-text);
+  color: var(--cyan-text);
 }
 
 .gx-reg:empty {
@@ -804,7 +919,7 @@ input[type="range"] {
 .gx-slope {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
+  gap: 5px;
   align-items: end;
 }
 
@@ -814,18 +929,18 @@ input[type="range"] {
 
 .gx-num {
   display: grid;
-  gap: 5px;
+  gap: 4px;
 }
 
 .gx-compass {
-  font: 600 10px/1 var(--mono);
-  color: var(--cobalt-text);
+  font: 600 9px/1 var(--mono);
+  color: var(--signal-text);
 }
 
 /* Legends. */
 .gx-legend {
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .gx-legend[hidden] {
@@ -839,20 +954,32 @@ input[type="range"] {
 }
 
 .gx-ramp {
-  height: 10px;
+  height: 8px;
   border: 1px solid var(--line);
+}
+
+/* Elevation colour steps aside while the cut/fill map is on. */
+.gx-legend[data-paused="true"] .gx-ramp,
+.gx-legend[data-paused="true"] .gx-legend-range {
+  opacity: 0.35;
+}
+
+.gx-legend[data-paused="true"]::after {
+  content: "Paused while the cut/fill map is on";
+  font: 400 9.5px/1.5 var(--mono);
+  color: var(--prose);
 }
 
 .gx-legend-range {
   display: flex;
   justify-content: space-between;
-  font: 500 11px/1 var(--mono);
-  color: var(--bone-2);
+  font: 500 10px/1 var(--mono);
+  color: var(--read);
 }
 
 .gx-cf-legend {
   display: grid;
-  gap: 5px;
+  gap: 4px;
 }
 
 .gx-cf-legend:empty {
@@ -861,7 +988,7 @@ input[type="range"] {
 
 .cf-bar {
   display: flex;
-  height: 10px;
+  height: 8px;
   border: 1px solid var(--line);
 }
 
@@ -872,7 +999,7 @@ input[type="range"] {
 .cf-scale {
   display: flex;
   justify-content: space-between;
-  font: 600 9.5px/1 var(--display);
+  font: 600 8.5px/1 var(--mono);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--slate);
@@ -899,7 +1026,7 @@ input[type="range"] {
   justify-content: space-between;
   text-transform: none;
   letter-spacing: 0.04em;
-  font: 500 12px/1.2 var(--mono);
+  font: 500 11px/1.2 var(--mono);
 }
 
 .gx-list .open span:first-child {
@@ -915,22 +1042,29 @@ input[type="range"] {
 
 .gx-list li.on .open {
   border-color: var(--signal);
+  box-shadow: inset 2px 0 0 var(--signal);
 }
 
 .gx-list .del {
-  min-width: 34px;
+  min-width: 32px;
   padding-inline: 8px;
-  color: var(--slate);
 }
 
 .gx-pre {
-  font: 400 11px/1.6 var(--mono);
-  color: var(--bone-2);
+  font: 400 10px/1.65 var(--mono);
+  color: var(--read);
   white-space: pre-wrap;
 }
 
 .gx-pre:empty {
   display: none;
+}
+
+/* The single human line that closes the rail (oracular register). */
+.gx-sign {
+  padding: 6px 2px 0;
+  font: italic 400 13px/1.3 var(--oracular);
+  color: var(--slate);
 }
 
 /* ── Stage ───────────────────────────────────────────────────────────── */
@@ -941,7 +1075,7 @@ input[type="range"] {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--night);
+  background: var(--ground);
 }
 
 #map {
@@ -949,6 +1083,12 @@ input[type="range"] {
   inset: 0;
 }
 
+/* Instrument pointer over the map; MapLibre's pointer/grab states still win. */
+#map .maplibregl-canvas-container.maplibregl-interactive {
+  cursor: var(--reticle), crosshair;
+}
+
+/* Standby frame: dashed, bracketed, on a dot lattice. */
 .gx-boot {
   position: absolute;
   inset: 0;
@@ -956,50 +1096,51 @@ input[type="range"] {
   place-items: center;
   padding: 16px;
   background:
-    radial-gradient(var(--dot) 1px, transparent 1.2px) 0 0 / 16px 16px,
-    var(--night);
+    radial-gradient(var(--dot) 1px, transparent 1.4px) 0 0 / 9px 9px,
+    var(--ground);
   z-index: 2;
-  transition: opacity 0.6s ease;
 }
 
 .gx-boot .gx-frame {
   display: grid;
   gap: 10px;
-  max-width: 440px;
-  padding: 26px 30px;
+  max-width: 460px;
+  padding: 28px 30px;
   text-align: center;
+  border-style: dashed;
   box-shadow: none;
 }
 
 .gx-boot-title {
   font: 600 12px/1 var(--display);
-  letter-spacing: 0.3em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
+  color: var(--ink);
 }
 
 .gx-boot-title::after {
   content: "…";
-  animation: gx-blink 1.2s steps(2, start) infinite;
-}
-
-@keyframes gx-blink {
-  to {
-    visibility: hidden;
-  }
 }
 
 .gx-boot-text {
-  font: 400 11.5px/1.6 var(--mono);
-  color: var(--slate);
+  font: 400 10.5px/1.65 var(--mono);
+  color: var(--prose);
+}
+
+.gx-triad {
+  font: 400 13px/1 var(--cuneiform);
+  letter-spacing: 0.6em;
+  color: var(--line-3);
 }
 
 .gx-boot.done {
   opacity: 0;
   pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 
 .gx-boot[data-kind="error"] .gx-boot-title {
-  color: var(--signal-text);
+  color: var(--alert);
 }
 
 .gx-boot[data-kind="error"] .gx-boot-title::after {
@@ -1015,12 +1156,14 @@ input[type="range"] {
   align-items: center;
   gap: 12px;
   max-width: calc(100% - 24px);
-  padding: 6px 6px 6px 14px;
-  font: 500 11.5px/1.3 var(--mono);
-  color: var(--bone);
-  background: var(--deck-glass);
-  border: 1px solid var(--cobalt);
-  box-shadow: var(--shadow);
+  padding: 5px 5px 5px 12px;
+  font: 500 10.5px/1.3 var(--mono);
+  color: var(--ink-2);
+  background-color: var(--deck-glass);
+  border: 1px solid rgb(60 98 255 / 0.55);
+  box-shadow:
+    0 0 14px rgb(60 98 255 / 0.25),
+    var(--shadow);
   z-index: 4;
   /* A corner dragged under the bar must still reach the map. */
   pointer-events: none;
@@ -1070,31 +1213,32 @@ input[type="range"] {
   font: 600 10.5px/1 var(--display);
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--cobalt-text);
+  color: var(--ink);
 }
 
 .gx-drawer-head h2::before {
   content: "";
   display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 10px;
-  vertical-align: 1px;
+  width: 4px;
+  height: 4px;
+  margin-right: 9px;
+  vertical-align: 1.5px;
   background: var(--phosphor);
+  box-shadow: 0 0 7px var(--phosphor);
 }
 
 .gx-drawer-stats {
-  font: 400 11px/1.55 var(--mono);
-  color: var(--bone-2);
+  font: 500 10px/1.6 var(--mono);
+  color: var(--read);
 }
 
 .gx-chart-host {
-  height: 152px;
-  font: 400 11px var(--mono);
+  height: 150px;
+  font: 400 10px var(--mono);
   color: var(--slate);
 }
 
-/* Profile chart: an oscilloscope trace in phosphor. */
+/* Profile chart: a thin phosphor trace, no grid, no fill; glow only at the cursor. */
 .chart {
   display: block;
   touch-action: none;
@@ -1103,27 +1247,28 @@ input[type="range"] {
 .chart .grid {
   stroke: var(--line);
   stroke-width: 1;
+  stroke-dasharray: 1 5;
 }
 
 .chart .tick {
   fill: var(--slate);
-  font: 400 10px var(--mono);
+  font: 600 8.5px var(--mono);
+  letter-spacing: 0.08em;
 }
 
 .chart .area {
-  fill: var(--phosphor);
-  opacity: 0.1;
+  fill: none;
 }
 
 .chart .line {
   fill: none;
   stroke: var(--phosphor);
-  stroke-width: 1.6;
+  stroke-width: 1.3;
   stroke-linejoin: round;
 }
 
 .chart .cursor line {
-  stroke: var(--bone-2);
+  stroke: var(--ink-2);
   stroke-width: 1;
   stroke-dasharray: 2 3;
 }
@@ -1132,35 +1277,58 @@ input[type="range"] {
   fill: var(--phosphor);
   stroke: var(--deck);
   stroke-width: 2;
+  filter: drop-shadow(0 0 4px var(--phosphor));
 }
 
 .chart .cursor-label {
-  fill: var(--bone);
-  font: 600 10.5px var(--mono);
+  fill: var(--ink);
+  font: 600 10px var(--mono);
   paint-order: stroke;
   stroke: var(--deck);
   stroke-width: 3px;
+}
+
+/* Spine: the collapsed rail keeps its title, written vertically. */
+.gx-spine {
+  display: none;
+}
+
+body.panel-off .gx-spine {
+  display: flex;
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  min-height: 0;
+  padding: 14px 7px;
+  z-index: 4;
 }
 
 .gx-exit {
   display: none;
 }
 
-/* ── Status bar ──────────────────────────────────────────────────────── */
+/* ── Readout dock (status bar) ───────────────────────────────────────── */
 
 .gx-statusbar {
   grid-area: status;
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 18px;
-  min-height: 30px;
+  gap: 16px;
+  min-height: 28px;
   padding-block: 5px calc(5px + env(safe-area-inset-bottom, 0px));
-  padding-left: max(14px, env(safe-area-inset-left, 0px));
-  padding-right: max(14px, env(safe-area-inset-right, 0px));
-  background: var(--deck);
-  border-top: 1px solid var(--line);
-  font: 500 11px/1.3 var(--mono);
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  background-color: var(--deck-glass);
+  border-top: 1px solid var(--line-2);
+  font: 500 10.5px/1.3 var(--mono);
   z-index: 4;
+}
+
+.gx-statusbar::before {
+  top: -1px;
 }
 
 .gx-readout {
@@ -1169,16 +1337,16 @@ input[type="range"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--bone);
+  color: var(--ink-2);
 }
 
 .gx-badge {
   flex: none;
-  max-width: 48%;
+  max-width: 46%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: 600 9.5px/1.3 var(--display);
+  font: 600 8.5px/1.3 var(--mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--slate);
@@ -1187,7 +1355,7 @@ input[type="range"] {
 /* ── Map chrome ──────────────────────────────────────────────────────── */
 
 .maplibregl-ctrl-group {
-  background: var(--deck) !important;
+  background: var(--deck-glass) !important;
   border: 1px solid var(--line-2);
   border-radius: 0 !important;
   box-shadow: none !important;
@@ -1203,41 +1371,44 @@ input[type="range"] {
 
 .maplibregl-ctrl-scale {
   background: var(--deck-glass) !important;
-  color: var(--bone-2) !important;
-  border-color: var(--bone-2) !important;
-  font: 500 10px/1.4 var(--mono) !important;
+  color: var(--read) !important;
+  border-color: var(--read) !important;
+  font: 500 9px/1.4 var(--mono) !important;
 }
 
 .maplibregl-ctrl-attrib {
   background: var(--deck-glass) !important;
   color: var(--slate) !important;
-  font: 400 10px/1.4 var(--mono);
+  font: 400 9px/1.4 var(--mono);
 }
 
 .maplibregl-ctrl-attrib a {
-  color: var(--bone-2) !important;
+  color: var(--ink-2) !important;
 }
 
 .maplibregl-ctrl-attrib-button {
   filter: var(--icon-filter);
 }
 
-/* Field corners while drawing: square sensor marks, numbered. */
+/* Field corners while drawing: square marks in signal light, numbered. */
 .vertex {
   width: 20px;
   height: 20px;
-  background: var(--cobalt-fill);
-  border: 1px solid #ece8dc;
-  color: #ffffff;
-  font: 700 10px/18px var(--mono);
+  background: #1e1ea8;
+  border: 1px solid #3c62ff;
+  color: #ece8dc;
+  font: 700 9.5px/18px var(--mono);
   text-align: center;
   cursor: grab;
-  box-shadow: 0 0 0 1px rgb(4 4 26 / 0.7);
+  box-shadow:
+    0 0 8px rgb(60 98 255 / 0.6),
+    0 0 0 1px rgb(6 6 26 / 0.8);
 }
 
 .vertex.closer {
-  background: #ff6b26;
-  border-color: #ffffff;
+  background: #3c62ff;
+  border-color: #ece8dc;
+  color: #ffffff;
 }
 
 .midpoint {
@@ -1246,7 +1417,7 @@ input[type="range"] {
   min-height: 0;
   padding: 0;
   border: 1px solid #7c9aff;
-  background: rgb(4 4 26 / 0.82);
+  background: rgb(6 6 26 / 0.85);
   color: #7c9aff;
   font: 700 12px/13px var(--mono);
   cursor: copy;
@@ -1255,12 +1426,13 @@ input[type="range"] {
 /* The selected field's tag on the map. */
 .gx-tag {
   padding: 3px 7px;
-  font: 600 9.5px/1.2 var(--display);
+  font: 600 8.5px/1.2 var(--mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: #ece8dc;
-  background: rgb(4 4 26 / 0.86);
-  border: 1px solid #ff6b26;
+  background: rgb(6 6 26 / 0.88);
+  border: 1px solid #3c62ff;
+  box-shadow: 0 0 10px rgb(60 98 255 / 0.45);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -1275,7 +1447,8 @@ body.immersive .gx-app {
 
 body.immersive .gx-topbar,
 body.immersive .gx-panel,
-body.immersive .gx-statusbar {
+body.immersive .gx-statusbar,
+body.immersive .gx-spine {
   display: none;
 }
 
@@ -1283,11 +1456,17 @@ body.immersive .gx-exit {
   display: inline-flex;
   position: absolute;
   top: max(12px, env(safe-area-inset-top, 0px));
-  right: max(52px, calc(env(safe-area-inset-right, 0px) + 52px));
+  right: calc(52px + env(safe-area-inset-right, 0px));
   z-index: 5;
 }
 
-/* ── Phone ───────────────────────────────────────────────────────────── */
+/* ── Responsive: hide by priority, then the phone sheet ──────────────── */
+
+@media (max-width: 1100px) {
+  .gx-datum {
+    display: none;
+  }
+}
 
 @media (max-width: 700px) {
   .gx-app {
@@ -1303,8 +1482,8 @@ body.immersive .gx-exit {
   }
 
   .gx-topbar {
-    gap: 10px;
-    min-height: 46px;
+    gap: 8px;
+    min-height: 44px;
   }
 
   .gx-brand {
@@ -1312,13 +1491,7 @@ body.immersive .gx-exit {
     border-right: 0;
   }
 
-  .gx-wordmark {
-    font-size: 12.5px;
-    letter-spacing: 0.2em;
-  }
-
   .gx-sub,
-  .gx-datum,
   .gx-status span {
     display: none;
   }
@@ -1334,6 +1507,7 @@ body.immersive .gx-exit {
 
   .gx-top-actions .gx-btn {
     min-width: 36px;
+    min-height: 34px;
     padding-inline: 10px;
   }
 
@@ -1344,28 +1518,28 @@ body.immersive .gx-exit {
     bottom: 0;
     height: 48%;
     border-left: 0;
-    border-top: 1px solid var(--cobalt-deep);
+    border-top: 1px solid var(--line-3);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     z-index: 5;
   }
 
   .gx-panel-body {
-    padding-left: max(12px, env(safe-area-inset-left, 0px));
-    padding-right: max(12px, env(safe-area-inset-right, 0px));
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+    padding-right: max(10px, env(safe-area-inset-right, 0px));
   }
 
-  /* The readout rides at the top of the map; the badge stays in the panel's data section. */
+  /* The readout rides at the top of the map; the badge waits in the rail. */
   .gx-statusbar {
     grid-area: stage;
     align-self: start;
     min-height: 0;
-    padding: 6px 10px;
-    margin: 8px 56px 0 8px;
-    background: var(--deck-glass);
-    border: 1px solid var(--line);
+    padding: 5px 9px;
+    margin: 8px 52px 0 8px;
+    border: 1px solid var(--line-2);
     pointer-events: none;
   }
 
+  .gx-statusbar::before,
   .gx-badge {
     display: none;
   }
@@ -1392,11 +1566,13 @@ body.immersive .gx-exit {
   }
 
   .gx-chart-host {
-    height: 118px;
+    height: 116px;
   }
 
-  body.immersive .gx-exit {
-    right: 52px;
+  body.panel-off .gx-spine {
+    top: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    transform: none;
   }
 }
 

@@ -23,6 +23,7 @@ import {
   designGrid,
   designHeight,
   robustFit,
+  transportHaulM,
   type DesignPlane,
   type DesignSpec,
   type Earthworks,
@@ -38,6 +39,7 @@ import {
 } from "../../src/geo/lambert93";
 
 import { CUT_FILL_RAMP, MAP } from "./brand";
+import { height as fmtHeight, grouped } from "./units";
 
 /*
  * Surface design: the field's target surface (its natural fall, a slope
@@ -48,6 +50,9 @@ import { CUT_FILL_RAMP, MAP } from "./brand";
 
 export type SurfaceMode = "fit" | "slope" | "level";
 
+/** Fewer heights than this inside a field and no design is offered. */
+const MIN_DESIGN_CELLS = 12;
+
 const collection = (
   features: GeoJSON.Feature[] = [],
 ): GeoJSON.FeatureCollection => ({ type: "FeatureCollection", features });
@@ -56,6 +61,7 @@ const collection = (
 const data = {
   contours: collection(),
   fall: collection(),
+  haul: collection(),
 };
 
 /** PNG bytes of the cut/fill map, served to MapLibre through `sillon://cutfill/<n>/0/0`. */
@@ -65,6 +71,8 @@ export const cutFillPng = (n: number) => pngs.get(n) ?? null;
 export const surfaceSources = (): Record<string, SourceSpecification> => ({
   "sd-contours": { type: "geojson", data: data.contours },
   "sd-fall": { type: "geojson", data: data.fall },
+  // Line metrics let the haul wire fade from cut (ember) to fill (cyan).
+  "sd-haul": { type: "geojson", data: data.haul, lineMetrics: true },
 });
 
 const isKind = (kind: string): ["==", ["get", string], string] => [
@@ -96,11 +104,49 @@ export const surfaceLayers = (): LayerSpecification[] => [
     filter: isKind("design"),
     layout: { "line-join": "round" },
     paint: {
-      "line-color": MAP.cobaltLight,
+      "line-color": MAP.signalLight,
       "line-opacity": 0.95,
       "line-width": major(1.8, 1),
       "line-dasharray": [3, 2],
     },
+  },
+  {
+    id: "sd-haul-casing",
+    type: "line",
+    source: "sd-haul",
+    filter: ["==", ["geometry-type"], "LineString"],
+    layout: { "line-cap": "round" },
+    paint: { "line-color": MAP.casing, "line-width": 7, "line-opacity": 0.55 },
+  },
+  {
+    // Earth movement as one wire: soil leaves the cut (ember) for the fill (cyan).
+    id: "sd-haul-line",
+    type: "line",
+    source: "sd-haul",
+    filter: ["==", ["geometry-type"], "LineString"],
+    layout: { "line-cap": "round" },
+    paint: {
+      "line-width": 3.2,
+      // Through bone, not grey: orange to cyan in RGB would go muddy midway.
+      "line-gradient": [
+        "interpolate",
+        ["linear"],
+        ["line-progress"],
+        0,
+        MAP.ember,
+        0.5,
+        MAP.bone,
+        1,
+        MAP.fillCyan,
+      ],
+    },
+  },
+  {
+    id: "sd-haul-head",
+    type: "fill",
+    source: "sd-haul",
+    filter: ["==", ["geometry-type"], "Polygon"],
+    paint: { "fill-color": MAP.fillCyan },
   },
   {
     id: "sd-fall-casing",
@@ -116,18 +162,19 @@ export const surfaceLayers = (): LayerSpecification[] => [
     source: "sd-fall",
     filter: ["==", ["geometry-type"], "LineString"],
     layout: { "line-cap": "round" },
-    paint: { "line-color": MAP.cobaltLight, "line-width": 3.5 },
+    paint: { "line-color": MAP.signalLight, "line-width": 3.5 },
   },
   {
     id: "sd-fall-head",
     type: "fill",
     source: "sd-fall",
     filter: ["==", ["geometry-type"], "Polygon"],
-    paint: { "fill-color": MAP.cobaltLight },
+    paint: { "fill-color": MAP.signalLight },
   },
 ];
 
-const int = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 });
+/** A whole number, thousands grouped with narrow no-break spaces. */
+const whole = (v: number) => grouped(v, 0);
 
 const $ = <T extends HTMLElement>(id: string) => {
   const el = document.getElementById(id);
@@ -192,7 +239,11 @@ const toPng = async (
       const canvas = new OffscreenCanvas(width, height);
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        ctx.putImageData(new ImageData(rgba, width, height), 0, 0);
+        ctx.putImageData(
+          new ImageData(rgba as Uint8ClampedArray<ArrayBuffer>, width, height),
+          0,
+          0,
+        );
         const blob = await canvas.convertToBlob({ type: "image/png" });
         return await blob.arrayBuffer();
       }
@@ -209,6 +260,8 @@ export type SurfaceResult = {
   works: Earthworks;
   fall: { slopePct: number; fallDeg: number };
   ratio: number;
+  /** Lower bound on the mean haul, ground metres (0 when nothing moves). */
+  haulMeanM: number;
 };
 
 export type SurfaceContext = {
@@ -217,6 +270,8 @@ export type SurfaceContext = {
   offerFile: (filename: string, data: string) => Promise<void> | void;
   /** File-name stem of the current field, for downloads. */
   fieldStem: () => string;
+  /** The cut/fill map went on or off (the page pauses elevation colour meanwhile). */
+  onMapShown?: (on: boolean) => void;
 };
 
 export const installSurface = (ctx: SurfaceContext) => {
@@ -259,18 +314,29 @@ export const installSurface = (ctx: SurfaceContext) => {
   let w: FieldWindow | null = null;
   let fit: PlaneFit | null = null;
   let last: SurfaceResult | null = null;
-  let note = "";
+  /** About the field's grid (its source, coverage); set with the field. */
+  let baseNote = "";
+  /** About the contours at the chosen interval. */
+  let contourNote = "";
   let existContours: GeoJSON.Feature[] = [];
   let designContours: GeoJSON.Feature[] = [];
   let intervalUsed = 0;
   let rasterSeq = 0;
   let style: CutFillStyle | null = null;
 
+  const showNote = () => {
+    ui.note.textContent = [baseNote, contourNote].filter(Boolean).join(" ");
+  };
+
   const setSourceData = (id: string, fc: GeoJSON.FeatureCollection) =>
     (map.getSource(id) as GeoJSONSource | undefined)?.setData(fc);
 
+  /**
+   * Runs `fn` once the style's layers exist. Not isStyleLoaded(): that stays
+   * false while any tile is still loading, and "style.load" never fires again.
+   */
   const whenStyleReady = (fn: () => void) => {
-    if (map.isStyleLoaded()) fn();
+    if (map.getLayer("sd-contour-exist")) fn();
     else map.once("style.load", () => fn());
   };
 
@@ -283,8 +349,8 @@ export const installSurface = (ctx: SurfaceContext) => {
     const k = last.works;
     const ha = w.areaM2 / 1e4;
     const rows: [string, string, string?][] = [
-      ["Cut", `${int.format(k.cutM3)} m³`, "cut"],
-      ["Fill", `${int.format(k.fillM3)} m³`, "fill"],
+      ["Cut", `${whole(k.cutM3)} m³`, "cut"],
+      ["Fill", `${whole(k.fillM3)} m³`, "fill"],
       [
         "Cut : fill",
         Number.isFinite(k.ratio)
@@ -296,10 +362,10 @@ export const installSurface = (ctx: SurfaceContext) => {
         Math.abs(k.netM3) < 0.5
           ? "balanced"
           : k.netM3 > 0
-            ? `${int.format(k.netM3)} m³ surplus to haul off`
-            : `${int.format(-k.netM3)} m³ to bring in`,
+            ? `${whole(k.netM3)} m³ surplus to haul off`
+            : `${whole(-k.netM3)} m³ to bring in`,
       ],
-      ["Per hectare", `${int.format(k.m3PerHa)} m³/ha cut`],
+      ["Per hectare", `${whole(k.m3PerHa)} m³/ha cut`],
       [
         "Depth",
         `±${(k.meanDepthM * 100).toFixed(0)} cm mean · cut ≤ ${k.maxCutM.toFixed(2)} m · fill ≤ ${k.maxFillM.toFixed(2)} m`,
@@ -308,7 +374,7 @@ export const installSurface = (ctx: SurfaceContext) => {
         "Areas",
         `cut ${k.cutAreaHa.toFixed(2)} · fill ${k.fillAreaHa.toFixed(2)} · on grade ${k.onGradeAreaHa.toFixed(2)} ha`,
       ],
-      ["Haul", k.haulM > 0 ? `${int.format(k.haulM)} m centre to centre` : "–"],
+      ["Haul", haulText(last)],
       [
         "Design",
         last.fall.slopePct < 0.005
@@ -329,13 +395,102 @@ export const installSurface = (ctx: SurfaceContext) => {
     );
   };
 
+  /**
+   * The mean haul. A lower bound ("≥") when cut and fill balance; with a
+   * surplus or a shortfall part of the soil leaves or arrives by road, so the
+   * figure is only an estimate ("≈"). The centres' distance is added when it
+   * says something else: the net direction the soil travels.
+   */
+  const haulText = (r: SurfaceResult) => {
+    const k = r.works;
+    if (!(r.haulMeanM > 0)) return "–";
+    const balanced = Math.abs(k.netM3) <= 0.02 * Math.max(k.cutM3, k.fillM3);
+    const mean = `${balanced ? "≥" : "≈"} ${whole(r.haulMeanM)} m mean`;
+    return k.haulM < 0.9 * r.haulMeanM
+      ? `${mean} · centres ${whole(k.haulM)} m apart`
+      : mean;
+  };
+
   /** Design height at the centroid of the field's valid cells. */
   const formatDesignHeight = () => {
     if (!last) return "";
-    return `${last.plane.z0.toFixed(2)} m at centre`;
+    return `${fmtHeight(last.plane.z0)} at centre`;
   };
 
   // ── Map layers ──
+  /** The wire from the volume-weighted centre of the cut to that of the fill. */
+  const drawHaul = () => {
+    data.haul = collection();
+    if (w && last && st.showMap) {
+      const { originX, originY, cellSize, width, height } = w.grid;
+      const d = last.works.depth;
+      let cv = 0;
+      let cx = 0;
+      let cy = 0;
+      let fv = 0;
+      let fx = 0;
+      let fy = 0;
+      for (let r = 0; r < height; r++) {
+        const y = originY - (r + 0.5) * cellSize;
+        for (let c = 0; c < width; c++) {
+          const v = d[r * width + c];
+          if (!(Math.abs(v) >= 0.02)) continue; // NaN and on-grade move no soil worth drawing
+          const x = originX + (c + 0.5) * cellSize;
+          if (v > 0) {
+            cv += v;
+            cx += v * x;
+            cy += v * y;
+          } else {
+            fv -= v;
+            fx -= v * x;
+            fy -= v * y;
+          }
+        }
+      }
+      if (cv > 0 && fv > 0) {
+        const a = { x: cx / cv, y: cy / cv };
+        const b = { x: fx / fv, y: fy / fv };
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        if (len > 4 * cellSize) {
+          const ux = (b.x - a.x) / len;
+          const uy = (b.y - a.y) / len;
+          const head = Math.min(len * 0.3, Math.max(8, len * 0.12));
+          const ll = (x: number, y: number): GeoJSON.Position => {
+            const q = lambert93ToLngLat({ x, y });
+            return [q.lng, q.lat];
+          };
+          const neck = { x: b.x - ux * head, y: b.y - uy * head };
+          data.haul = collection([
+            {
+              type: "Feature",
+              properties: {},
+              geometry: {
+                type: "LineString",
+                coordinates: [ll(a.x, a.y), ll(neck.x, neck.y)],
+              },
+            },
+            {
+              type: "Feature",
+              properties: {},
+              geometry: {
+                type: "Polygon",
+                coordinates: [
+                  [
+                    ll(b.x, b.y),
+                    ll(neck.x - uy * head * 0.45, neck.y + ux * head * 0.45),
+                    ll(neck.x + uy * head * 0.45, neck.y - ux * head * 0.45),
+                    ll(b.x, b.y),
+                  ],
+                ],
+              },
+            },
+          ]);
+        }
+      }
+    }
+    setSourceData("sd-haul", data.haul);
+  };
+
   const drawFall = () => {
     if (!w || !last || last.fall.slopePct < 0.005 || st.mode === "fit") {
       data.fall = collection();
@@ -359,6 +514,7 @@ export const installSurface = (ctx: SurfaceContext) => {
   const computeExistContours = () => {
     existContours = [];
     intervalUsed = 0;
+    contourNote = "";
     if (!w) return;
     const { width, height, cellSize } = w.grid;
     let lo = Infinity;
@@ -378,7 +534,8 @@ export const installSurface = (ctx: SurfaceContext) => {
       }).map((f) => ({ ...f, properties: { ...f.properties, kind: "exist" } }));
     } catch (e) {
       if (e instanceof RangeError) {
-        note = "Contours are too dense at this interval; choose a larger one.";
+        contourNote =
+          "Contours are too dense at this interval; choose a larger one.";
       } else throw e;
     }
   };
@@ -400,13 +557,19 @@ export const installSurface = (ctx: SurfaceContext) => {
     }
   };
 
+  let mapShown = false;
   const setRasterVisibility = () => {
+    const on = !!(st.showMap && w);
     if (map.getLayer("sd-cutfill"))
       map.setLayoutProperty(
         "sd-cutfill",
         "visibility",
-        st.showMap && w ? "visible" : "none",
+        on ? "visible" : "none",
       );
+    if (on !== mapShown) {
+      mapShown = on;
+      ctx.onMapShown?.(on);
+    }
   };
 
   const renderLegend = () => {
@@ -541,17 +704,27 @@ export const installSurface = (ctx: SurfaceContext) => {
 
   const compute = (contoursToo = false) => {
     if (!w) return;
-    note = note.startsWith("Contours are too dense") ? "" : note;
     const spec = specOf();
-    const res = design(w, spec, { ratio: st.ratio, offsetM: st.offsetCm / 100 }, fit);
-    last = { ...res, spec, ratio: st.ratio };
+    const res = design(
+      w,
+      spec,
+      { ratio: st.ratio, offsetM: st.offsetCm / 100 },
+      fit,
+    );
+    // Both are lower bounds on the mean haul; the larger is the better one.
+    const haulMeanM = Math.max(
+      transportHaulM(w, res.works.depth),
+      res.works.haulM,
+    );
+    last = { ...res, spec, ratio: st.ratio, haulMeanM };
     if (contoursToo) computeExistContours();
     computeDesignContours();
     renderWorks();
     drawFall();
+    drawHaul();
     pushContours();
     void renderRaster();
-    ui.note.textContent = note;
+    showNote();
     ui.sheet.disabled = false;
   };
 
@@ -616,6 +789,7 @@ export const installSurface = (ctx: SurfaceContext) => {
   ui.showMap.addEventListener("change", () => {
     st.showMap = ui.showMap.checked;
     setRasterVisibility();
+    drawHaul();
   });
   ui.showContours.addEventListener("change", () => {
     st.showContours = ui.showContours.checked;
@@ -628,7 +802,7 @@ export const installSurface = (ctx: SurfaceContext) => {
     computeExistContours();
     computeDesignContours();
     pushContours();
-    ui.note.textContent = note;
+    showNote();
   });
 
   // ── Cut sheet ──
@@ -638,7 +812,9 @@ export const installSurface = (ctx: SurfaceContext) => {
     const plane = last.plane;
     const { originX, originY, cellSize, width, height } = w.grid;
     const spacing = w.areaM2 > 500_000 ? 20 : 10;
-    const rows = ["stake,easting_l93,northing_l93,lng,lat,existing_m,design_m,cut_m"];
+    const rows = [
+      "stake,easting_l93,northing_l93,lng,lat,existing_m,design_m,cut_m",
+    ];
     let n = 0;
     const x0 = Math.ceil(originX / spacing) * spacing;
     const y0 = Math.floor(originY / spacing) * spacing;
@@ -668,8 +844,13 @@ export const installSurface = (ctx: SurfaceContext) => {
 
   // ── API ──
   const setField = (window_: FieldWindow | null, why = "") => {
+    if (window_ && window_.validCount < MIN_DESIGN_CELLS) {
+      message(why || "Too few heights inside this field to design it.");
+      return;
+    }
     w = window_;
-    note = why;
+    baseNote = why;
+    contourNote = "";
     last = null;
     rasterSeq++;
     ui.section.hidden = !w;
@@ -682,12 +863,23 @@ export const installSurface = (ctx: SurfaceContext) => {
       pushContours();
       data.fall = collection();
       setSourceData("sd-fall", data.fall);
+      data.haul = collection();
+      setSourceData("sd-haul", data.haul);
       setRasterVisibility();
       renderWorks();
       renderLegend();
-      ui.note.textContent = why;
+      showNote();
       return;
     }
+    // Volumes come from the cells with heights only: say so when some lack one.
+    const cover = (w.validCount * w.cellArea) / w.areaM2;
+    if (cover < 0.98)
+      baseNote = [
+        baseNote,
+        `Heights cover ${Math.floor(cover * 100)} % of the field; volumes count that part only.`,
+      ]
+        .filter(Boolean)
+        .join(" ");
     fit = robustFit(w);
     const nat = naturalFall();
     st.mainPct = nat.pct;
@@ -699,21 +891,28 @@ export const installSurface = (ctx: SurfaceContext) => {
     compute(true);
   };
 
-  /** Shown while the field's grid is on its way (Live IGN). */
-  const loading = (message: string) => {
+  /**
+   * The section with a message and no design: while the field's grid is on
+   * its way (Live IGN), or when it holds too few heights.
+   */
+  const message = (text: string) => {
     w = null;
     last = null;
     rasterSeq++;
     ui.section.hidden = false;
     ui.works.replaceChildren();
     ui.legend.replaceChildren();
-    ui.note.textContent = message;
+    baseNote = text;
+    contourNote = "";
+    showNote();
     ui.sheet.disabled = true;
     existContours = [];
     designContours = [];
     pushContours();
     data.fall = collection();
     setSourceData("sd-fall", data.fall);
+    data.haul = collection();
+    setSourceData("sd-haul", data.haul);
     setRasterVisibility();
   };
 
@@ -737,7 +936,7 @@ export const installSurface = (ctx: SurfaceContext) => {
         : d > 0
           ? `CUT ${d.toFixed(2)} m`
           : `FILL ${(-d).toFixed(2)} m`;
-    return `${tag} · ground ${e.toFixed(2)} · design ${z.toFixed(2)} m`;
+    return `${tag} · ground ${fmtHeight(e)} · design ${fmtHeight(z)}`;
   };
 
   /** Design summary for exports (GeoJSON properties, shapefile columns). */
@@ -762,7 +961,7 @@ export const installSurface = (ctx: SurfaceContext) => {
   syncInputs();
   return {
     setField,
-    loading,
+    message,
     describeAt,
     summary,
     /** After a style rebuild: put the cut/fill image back if there is one. */

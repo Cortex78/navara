@@ -1,10 +1,21 @@
+import { encodeGrid } from "../artifact/pack";
 import { loadHeightsAt } from "../src/dem/corridor";
 import { renderDemTile } from "../src/dem/demTileBridge";
-import { lambert93Envelope, loadElevationGrid } from "../src/dem/elevationGrid";
-import { fieldSurface, type LngLatPolygon } from "../src/dem/fieldMask";
+import {
+  alignGrid,
+  lambert93Envelope,
+  loadElevationGrid,
+  type ElevationGrid,
+} from "../src/dem/elevationGrid";
+import {
+  fieldSurface,
+  maskGridCells,
+  type LngLatPolygon,
+} from "../src/dem/fieldMask";
 import { profileStep, sampleProfile } from "../src/dem/profile";
 import { ringPerimeterM } from "../src/field/geometry";
 import type { XY } from "../src/geo/lambert93";
+import type { Bbox } from "../src/geo/webMercator";
 import { searchPlaces } from "../src/ign/geocode";
 import {
   ELEVATION_LAYERS,
@@ -226,10 +237,11 @@ export const handleProxy = async (
 const NATIVE_FIELD_M2 = 600_000;
 
 /**
- * Area and relief of a field polygon (GeoJSON Polygon or MultiPolygon
- * coordinates, lng/lat) from the native Lambert-93 LiDAR HD grid.
+ * A field's polygons from GeoJSON Polygon or MultiPolygon coordinates
+ * (lng/lat), with their Lambert-93 envelope and its area in map m². Shared
+ * by every field handler, so they all refuse the same oversized outlines.
  */
-export const handleField = async (coordinates: unknown) => {
+const fieldOutline = (coordinates: unknown) => {
   if (!Array.isArray(coordinates))
     throw new Error("field must be GeoJSON coordinates");
   // A MultiPolygon nests one level deeper than a Polygon.
@@ -242,19 +254,190 @@ export const handleField = async (coordinates: unknown) => {
   const area = (bbox.maxX - bbox.minX) * (bbox.maxY - bbox.minY);
   // At 1 m that is 4 M cells: the grid, mask and heights stay under ~80 MB.
   if (area > 4e6) throw new RangeError("field bounding box over 4 km²");
+  return { polygons, bbox, area };
+};
+
+/**
+ * Area and relief of a field polygon (GeoJSON Polygon or MultiPolygon
+ * coordinates, lng/lat) from the native Lambert-93 LiDAR HD grid.
+ */
+export const handleField = async (coordinates: unknown) => {
+  const { polygons, bbox, area } = fieldOutline(coordinates);
   const cellSize = area > NATIVE_FIELD_M2 ? 1 : 0.5;
   const measure = async (layer: string) =>
     fieldSurface(
       await loadElevationGrid({ bbox, cellSize, layer, retries: 1 }),
       polygons,
     );
-  let surface = await measure(ELEVATION_LAYERS.lidarMntL93);
+  // A LiDAR HD layer that fails outright (an outage of that layer alone)
+  // falls through to RGE ALTI like one with no heights here.
+  let surface = await measure(ELEVATION_LAYERS.lidarMntL93).catch(() => null);
   let source = "LiDAR HD";
   if (!surface || surface.nodataShare > 0.5) {
     surface = await measure(ELEVATION_LAYERS.lidarMntMixed);
     source = "RGE ALTI";
   }
   return { ...surface, cellSize, source };
+};
+
+/**
+ * Most cells in a field's design grid: 500 kB of int16 before deflate, so
+ * the answer stays well inside what one connector call carries.
+ */
+export const MAX_FIELD_GRID_CELLS = 250_000;
+
+/** Design grid cell sizes, finest (native LiDAR HD) first. */
+const FIELD_GRID_CELL_SIZES = [0.5, 1, 1.5, 2, 2.5, 3, 4, 5];
+
+/**
+ * The finest cell size whose aligned grid over `bbox` has at most
+ * MAX_FIELD_GRID_CELLS cells; undefined when even 5 m has more.
+ */
+export const fieldGridCellSize = (bbox: Bbox): number | undefined =>
+  FIELD_GRID_CELL_SIZES.find((cellSize) => {
+    const { width, height } = alignGrid(bbox, cellSize);
+    return width * height <= MAX_FIELD_GRID_CELLS;
+  });
+
+/**
+ * A field's heights as handleFieldGrid answers them: the grid layout, and
+ * the heights above `base` encoded the way bake.ts writes pack grids.
+ */
+export type FieldGridAnswer = Omit<ElevationGrid, "crs" | "data"> & {
+  /** Whole metres taken off every height, so 1 cm steps fit int16 at any altitude. */
+  base: number;
+  /** Metres per stored step: 0.01 unless the field has over 327 m of relief. */
+  scale: number;
+  /** encodeGrid(heights − base, width, scale), zlib-deflated, as base64. */
+  data: string;
+  /** The DTM the heights come from: "LiDAR HD" or "RGE ALTI". */
+  source: string;
+};
+
+/** zlib (RFC 1950), the format bake.ts's deflateSync writes and the page inflates. */
+const zlibDeflate = async (bytes: Uint8Array) =>
+  new Uint8Array(
+    await new Response(
+      new Blob([bytes as BlobPart])
+        .stream()
+        .pipeThrough(new CompressionStream("deflate")),
+    ).arrayBuffer(),
+  );
+
+/**
+ * Encodes a grid for the wire as pack grids are (artifact/pack.ts), with
+ * heights stored above the floor of the lowest one: int16 at 1 cm holds
+ * 327 m, plenty of relief for a field but not a French altitude. A
+ * non-finite height cannot be stored, so it travels as no-data rather than
+ * stretching the step until every other cell rounds away.
+ */
+export const encodeFieldGrid = async (
+  g: ElevationGrid,
+  source: string,
+): Promise<FieldGridAnswer> => {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const v of g.data) {
+    if (!Number.isFinite(v)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const base = min <= max ? Math.floor(min) : 0;
+  // 1 cm steps, unless the relief needs wider ones to stay inside int16.
+  const scale = Math.max(1, Math.ceil((max - base) / 327.67)) / 100;
+  const bytes = encodeGrid(
+    g.data.map((v) => (Number.isFinite(v) ? v - base : NaN)),
+    g.width,
+    scale,
+  );
+  return {
+    layer: g.layer,
+    cellSize: g.cellSize,
+    originX: g.originX,
+    originY: g.originY,
+    width: g.width,
+    height: g.height,
+    base,
+    scale,
+    data: toBase64(await zlibDeflate(bytes)),
+    source,
+  };
+};
+
+const heightCount = (g: ElevationGrid, cells: Uint32Array) => {
+  let n = 0;
+  for (const i of cells) if (!Number.isNaN(g.data[i])) n++;
+  return n;
+};
+
+/**
+ * The grid cropped to the bounding box of the field's `cells`, NaN outside
+ * them, so only the field travels. A field with no height at all comes out
+ * 0 × 0, which the page reads as nothing to design on.
+ */
+const cropToField = (g: ElevationGrid, cells: Uint32Array): ElevationGrid => {
+  if (heightCount(g, cells) === 0)
+    return { ...g, width: 0, height: 0, data: new Float32Array(0) };
+  let c0 = g.width;
+  let c1 = 0;
+  let r0 = g.height;
+  let r1 = 0;
+  for (const i of cells) {
+    const col = i % g.width;
+    const row = (i - col) / g.width;
+    c0 = Math.min(c0, col);
+    c1 = Math.max(c1, col);
+    r0 = Math.min(r0, row);
+    r1 = Math.max(r1, row);
+  }
+  const width = c1 - c0 + 1;
+  const height = r1 - r0 + 1;
+  const data = new Float32Array(width * height).fill(NaN);
+  for (const i of cells) {
+    const col = i % g.width;
+    data[((i - col) / g.width - r0) * width + col - c0] = g.data[i];
+  }
+  return {
+    ...g,
+    originX: g.originX + c0 * g.cellSize,
+    originY: g.originY - r0 * g.cellSize,
+    width,
+    height,
+    data,
+  };
+};
+
+/**
+ * A field's height grid (GeoJSON Polygon or MultiPolygon coordinates), so
+ * the page can run the cut/fill design itself: at the finest cell size that
+ * keeps it within MAX_FIELD_GRID_CELLS, from LiDAR HD, or from the
+ * gap-filled layer when LiDAR HD covers under half the field or fails to
+ * load. Cropped to the
+ * field, NaN outside it; decoded by `decodeFieldGrid` in artifact/page/live.ts.
+ */
+export const handleFieldGrid = async (
+  coordinates: unknown,
+): Promise<FieldGridAnswer> => {
+  const { polygons, bbox } = fieldOutline(coordinates);
+  const cellSize = fieldGridCellSize(bbox);
+  if (cellSize === undefined)
+    throw new RangeError(
+      `field too long for ${MAX_FIELD_GRID_CELLS} cells of 5 m`,
+    );
+  const load = (layer: string) =>
+    loadElevationGrid({ bbox, cellSize, layer, retries: 1 });
+  // A LiDAR HD layer that fails outright falls through to RGE ALTI too.
+  const lidar = await load(ELEVATION_LAYERS.lidarMntL93).catch(() => null);
+  if (lidar) {
+    const cells = maskGridCells(lidar, polygons);
+    if (2 * heightCount(lidar, cells) >= cells.length)
+      return encodeFieldGrid(cropToField(lidar, cells), "LiDAR HD");
+  }
+  const grid = await load(ELEVATION_LAYERS.lidarMntMixed);
+  return encodeFieldGrid(
+    cropToField(grid, maskGridCells(grid, polygons)),
+    "RGE ALTI",
+  );
 };
 
 /** Longest profile line accepted, in ground metres. */

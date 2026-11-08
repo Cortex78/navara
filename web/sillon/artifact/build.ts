@@ -13,6 +13,8 @@ import { fileURLToPath } from "node:url";
 import { build } from "vite";
 
 const MAPLIBRE_VERSION = "5.24.0";
+/** The cuneiform signs the page shows (section marks, standby triad), so Google Fonts sends only these. */
+const CUNEIFORM = "𒆠𒆳𒀭𒌓𒁾𒅆𒍃";
 const out = process.argv[2];
 if (!out) throw new Error("usage: build.ts <outDir>");
 
@@ -58,7 +60,8 @@ const script = (await bundlePage()).replaceAll("</script", "<\\/script");
 const html = `<title>Sillon Camargue</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@1,6..72,400&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Cuneiform&text=${encodeURIComponent(CUNEIFORM)}&display=swap" />
 <style>
 ${pageCss}
 ${maplibreCss}

@@ -83,7 +83,8 @@ page ──connector: execute_sql──▶ sillon.proxy(keys) ──cache hit─
 - `supabase/keys.ts`: the key format (`kind=ortho&z=17&x=…&y=…`), shared by the
   page, Postgres and the Edge Function.
 - `supabase/schema.sql`: the `sillon` schema, tile cache, `sillon.proxy()`,
-  `sillon.field()` (area, relief, natural fall, levelling volumes) and
+  `sillon.field()` (area, relief, natural fall, levelling volumes),
+  `sillon.field_grid()` (the field's height grid for the cut/fill design) and
   `sillon.profile()` (heights along a line).
 - `supabase/proxy.ts`, `supabase/functions/ign-proxy/`: the Edge Function. It
   serves imagery tiles, Terrarium elevation tiles (about 60 kB instead of 350 kB
@@ -102,6 +103,29 @@ land-levelling volumes, and cuts elevation profiles. The engine-free parts live
 in `src/`: `dem/planeFit.ts`, `dem/profile.ts`, `dem/corridor.ts`,
 `field/geometry.ts`, `field/shapefile.ts`, `field/zip.ts`.
 
+### Surface design (cut/fill)
+
+`artifact/page/surface.ts` designs the field's target surface: its natural
+fall, a slope set by hand (main and cross fall) or dead level, balanced to a
+cut:fill ratio and raised or lowered in centimetres. It shows the earthworks
+(volumes, ratio, balance, depths, areas, a lower bound on the mean haul), a
+cut/fill map, contours of the ground and of the design, and the cut or fill
+under the cursor, and exports a cut sheet of stakes as CSV. The kernels are
+engine-free: `src/dem/design.ts`, `dem/contours.ts`, `dem/cutFillRaster.ts`,
+`dem/png.ts`. In pack mode the design runs on the 1 m LiDAR grid; in live mode
+on the grid `sillon.field_grid()` sends.
+
+### GAïa instrument UI
+
+The page follows the GAïa graphic identity: dark-first colour tokens
+(`artifact/page/style.css`) with a bone daylight theme, map colours in
+`artifact/page/brand.ts` (imagery graded to the bone/ultramarine duotone,
+signal blue for what is selected, ember for intensity only), surveyor
+typography in `artifact/page/units.ts`, and full screen in
+`artifact/page/fullscreen.ts` (native where allowed, an immersive layout
+otherwise; F toggles it).
+
 The published page declares these capabilities: `mcp` (Supabase
 `execute_sql`), `db` and `user` (My fields, under the viewer's private
-`data/users/<id>/`) and `downloads` (Shapefile, KML, GeoJSON, CSV).
+`data/users/<id>/`) and `downloads` (Shapefile, KML, GeoJSON, CSV, cut
+sheet).

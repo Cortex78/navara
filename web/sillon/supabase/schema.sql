@@ -1,8 +1,8 @@
 -- Database side of the Sillon artifact's live mode (Supabase project
 -- "sillon-tiles"). The artifact calls `sillon.proxy(keys)`,
--- `sillon.field(coordinates)` and `sillon.profile(coordinates)` through the
--- viewer's Supabase connector (execute_sql); misses go to the ign-proxy Edge
--- Function (functions/ign-proxy).
+-- `sillon.field(coordinates)`, `sillon.field_grid(coordinates)` and
+-- `sillon.profile(coordinates)` through the viewer's Supabase connector
+-- (execute_sql); misses go to the ign-proxy Edge Function (functions/ign-proxy).
 --
 -- After applying, set the Edge Function URL and the project's public anon key:
 --   insert into sillon.config (name, value) values
@@ -123,5 +123,13 @@ create or replace function sillon.profile(coordinates jsonb) returns jsonb
 language sql
 set search_path = ''
 as $$ select sillon.edge(jsonb_build_object('profile', coordinates)) $$;
+
+-- A field's height grid (GeoJSON Polygon/MultiPolygon coordinates), cropped
+-- to it and encoded like the pack grids, for the page's cut/fill design.
+-- Not cached: each outline gives its own grid.
+create or replace function sillon.field_grid(coordinates jsonb) returns jsonb
+language sql
+set search_path = ''
+as $$ select sillon.edge(jsonb_build_object('grid', coordinates)) $$;
 
 revoke all on all functions in schema sillon from public, anon, authenticated;

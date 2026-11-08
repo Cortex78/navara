@@ -1,6 +1,10 @@
+import type { ElevationGrid } from "../../src/dem/elevationGrid";
 import type { FieldSurface } from "../../src/dem/fieldMask";
 import { decodeTerrarium } from "../../src/dem/terrarium";
 import { KEY_PATTERN } from "../../supabase/keys";
+// Type only: the Edge code itself stays out of the page bundle.
+import type { FieldGridAnswer } from "../../supabase/proxy";
+import { decodeGrid, fromBase64 } from "../pack";
 
 /*
  * Live IGN data for the artifact. The page cannot fetch other sites, but it
@@ -29,6 +33,35 @@ export type McpLike = {
 
 type McpError = { code?: string; message?: string; server?: string };
 
+/** Edge refusals the page can say better than by quoting them. */
+const EDGE_REFUSALS: [RegExp, string][] = [
+  [
+    /bounding box over 4 km/,
+    "This field is too large for live IGN: its bounding box is over 4 km². Draw it in parts.",
+  ],
+  [
+    /too long for \d+ cells/,
+    "This field is too long for the live design grid. Draw it in parts.",
+  ],
+  [/longer than 10 km/, "A profile can be at most 10 km long."],
+];
+
+/**
+ * The reason inside an "ign-proxy HTTP n: {...}" exception (raised by
+ * `sillon.edge` in schema.sql), in the page's words; null for any other
+ * message. The Edge function answers every failure, its own refusals and
+ * IGN's outages alike, with `{"error": "..."}`.
+ */
+export const describeEdgeError = (message?: string): string | null => {
+  const m = /ign-proxy HTTP (\d+):\s*([\s\S]*)/.exec(message ?? "");
+  if (!m) return null;
+  const body = m[2];
+  for (const [re, text] of EDGE_REFUSALS) if (re.test(body)) return text;
+  // The JSON may arrive escaped inside the connector's own message.
+  const reason = /"error\\?"\s*:\s*\\?"([^"\\]+)/.exec(body)?.[1]?.trim();
+  return `Live IGN could not serve this${reason ? `: ${reason}` : ` (HTTP ${m[1]})`}. Try again in a moment.`;
+};
+
 /** What to tell the viewer when a connector call fails, by error code. */
 export const describeMcpError = (e: unknown): string => {
   const { code, message } = (e ?? {}) as McpError;
@@ -45,8 +78,14 @@ export const describeMcpError = (e: unknown): string => {
     case "server_unavailable":
       return "Supabase did not answer in time. Pan the map to try again.";
     case "tool_error":
-      return `The sillon-tiles database refused the request: ${message ?? "unknown error"}. It may be paused; restore it in the Supabase dashboard.`;
+      return (
+        describeEdgeError(message) ??
+        `The sillon-tiles database refused the request: ${message ?? "unknown error"}. It may be paused; restore it in the Supabase dashboard.`
+      );
     default:
+      // A plain Error is the page's own (an empty or unreadable answer),
+      // not the connector's: its message says more than "no connector".
+      if (code === undefined && e instanceof Error) return e.message;
       return `Live IGN is unavailable here (${code ?? "no connector"}).`;
   }
 };
@@ -104,6 +143,40 @@ const numericJson = (coordinates: unknown) => {
   if (!/^[-\d.,[\]e]+$/.test(literal))
     throw new Error("coordinates must be numbers");
   return literal;
+};
+
+/** A field's height grid from live IGN, and the DTM it came from. */
+export type LiveFieldGrid = ElevationGrid & { source: string };
+
+/**
+ * Reads handleFieldGrid's answer the way main.ts reads a pack grid (base64,
+ * zlib inflate, int16 row deltas), then adds back the base height.
+ */
+export const decodeFieldGrid = async (
+  g: FieldGridAnswer,
+): Promise<LiveFieldGrid> => {
+  const inflated = await new Response(
+    new Blob([fromBase64(g.data) as BlobPart])
+      .stream()
+      .pipeThrough(new DecompressionStream("deflate")),
+  ).arrayBuffer();
+  const data = decodeGrid(new Uint8Array(inflated), g.width, g.scale);
+  if (data.length !== g.width * g.height)
+    throw new Error(
+      `The field's height grid has ${data.length} cells, not ${g.width} × ${g.height}.`,
+    );
+  for (let i = 0; i < data.length; i++) data[i] += g.base;
+  return {
+    crs: "EPSG:2154",
+    layer: g.layer,
+    cellSize: g.cellSize,
+    originX: g.originX,
+    originY: g.originY,
+    width: g.width,
+    height: g.height,
+    data,
+    source: g.source,
+  };
 };
 
 export class LiveProxy {
@@ -169,6 +242,21 @@ export class LiveProxy {
     const r = parseSqlRows(res.payload)[0]?.r as LiveProfile | undefined;
     if (!r?.d) throw new Error("the profile came back empty");
     return r;
+  }
+
+  /**
+   * The field's height grid for the cut/fill design, cropped to it with NaN
+   * outside (see handleFieldGrid); 0 × 0 when IGN has no heights there.
+   */
+  async fieldGrid(coordinates: unknown): Promise<LiveFieldGrid> {
+    if (this.failure) throw this.failure;
+    const res = await this.call(
+      `select sillon.field_grid('${numericJson(coordinates)}'::jsonb) as g`,
+    );
+    const g = parseSqlRows(res.payload)[0]?.g as FieldGridAnswer | undefined;
+    if (typeof g?.data !== "string")
+      throw new Error("Live IGN sent back no height grid for this field.");
+    return decodeFieldGrid(g);
   }
 
   private call(query: string) {

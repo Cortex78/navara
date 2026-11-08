@@ -7,16 +7,7 @@ import maplibregl, {
   type StyleSpecification,
 } from "maplibre-gl";
 
-import {
-  formatAcquisition,
-  formatHeight,
-  formatLngLat,
-} from "../../src/app/format";
-import {
-  RELIEF_STOPS,
-  reliefCss,
-  reliefGradientCss,
-} from "../../src/app/relief";
+import { formatAcquisition } from "../../src/app/format";
 import {
   percentiles,
   sampleGrid,
@@ -53,7 +44,13 @@ import {
 } from "../pack";
 
 import { onActivity, track } from "./activity";
-import { MAP } from "./brand";
+import {
+  duotoneTile,
+  GAIA_RELIEF,
+  gaiaReliefCss,
+  gaiaReliefGradient,
+  MAP,
+} from "./brand";
 import { installWorkbench, overlayLayers, overlaySources } from "./fields";
 import { installFullscreen } from "./fullscreen";
 import {
@@ -63,6 +60,7 @@ import {
   type McpLike,
 } from "./live";
 import { cutFillPng, surfaceLayers, surfaceSources } from "./surface";
+import { grouped, height as formatHeight, l93, latLonDms } from "./units";
 
 /*
  * Sillon, artifact edition. Two data sources:
@@ -87,6 +85,7 @@ const ui = {
   linkStatus: $("link-status"),
   linkText: $("link-text"),
   boot: $("boot"),
+  spine: $<HTMLButtonElement>("spine"),
   status: $("status"),
   packName: $("pack-name"),
   srcPack: $<HTMLButtonElement>("src-pack"),
@@ -407,6 +406,30 @@ const installProtocol = (pack: PackManifest, grids: Promise<Grids>) => {
         if (!png) throw new Error("cut/fill image expired");
         return { data: png.slice(0) };
       }
+      case "ortho-duo":
+        // GAïa duotone of the pack orthophoto (bone ↔ ultramarine).
+        return {
+          data: (
+            await memo(key, async () => {
+              const raw =
+                (await packTile(pack.layers.ortho, z, x, y)) ??
+                (await ancestorTile(pack.layers.ortho, z, x, y));
+              return raw ? duotoneTile(raw) : TRANSPARENT_PNG;
+            })
+          ).slice(0),
+        };
+      case "live-ortho-duo":
+        try {
+          return {
+            data: (
+              await memo(key, async () =>
+                duotoneTile(await liveBytes(`kind=ortho&z=${z}&x=${x}&y=${y}`)),
+              )
+            ).slice(0),
+          };
+        } catch {
+          return { data: TRANSPARENT_PNG };
+        }
       case "live-ortho":
       case "live-irc":
       case "live-shade":
@@ -445,6 +468,8 @@ const state = {
   fieldsOn: true,
   range: { min: -0.5, max: 2.5 },
   autoRange: true,
+  /** The cut/fill map is on: elevation colour pauses so it reads alone. */
+  designMap: false,
 };
 
 const reliefExpression = (
@@ -452,9 +477,9 @@ const reliefExpression = (
   max: number,
 ): ExpressionSpecification => {
   const span = Math.max(max - min, 0.01);
-  const stops = RELIEF_STOPS.flatMap((c, i) => [
-    min + (span * i) / (RELIEF_STOPS.length - 1),
-    reliefCss(c),
+  const stops = GAIA_RELIEF.flatMap((c, i) => [
+    min + (span * i) / (GAIA_RELIEF.length - 1),
+    gaiaReliefCss(c),
   ]);
   return [
     "interpolate",
@@ -539,6 +564,7 @@ const buildStyle = (
       // Terrain and the DEM-drawn layers get separate sources, as MapLibre advises.
       terrain: dem(zooms.terrain),
       relief: dem(zooms.relief),
+      orthoDuo: raster("ortho-duo", zooms.ortho),
       ortho: raster("ortho", zooms.ortho),
       irc: raster("irc", zooms.irc),
       shade: raster("shade", zooms.shade),
@@ -553,18 +579,10 @@ const buildStyle = (
         type: "background",
         paint: { "background-color": cssVar("--night") || MAP.ground },
       },
-      // Imagery recedes (desaturated, dimmed) so the LiDAR and the
-      // instrument's own marks carry the colour.
-      {
-        id: "ortho",
-        type: "raster",
-        source: "ortho",
-        paint: {
-          "raster-saturation": -0.5,
-          "raster-brightness-max": 0.8,
-          "raster-contrast": 0.05,
-        },
-      },
+      // Imagery in the GAïa duotone by default (bone highlights, ultramarine
+      // shadows), so the LiDAR and the instrument's marks carry the colour.
+      { id: "ortho-duo", type: "raster", source: "orthoDuo" },
+      { id: "ortho", type: "raster", source: "ortho", layout: hidden },
       {
         id: "irc",
         type: "raster",
@@ -612,7 +630,7 @@ const buildStyle = (
       type: "line",
       source: "pack",
       paint: {
-        "line-color": MAP.cobaltLight,
+        "line-color": MAP.signalLight,
         "line-width": 1.4,
         "line-dasharray": [3, 2],
         "line-opacity": 0.85,
@@ -626,9 +644,10 @@ const buildStyle = (
 const applyLayers = (map: MapLibreMap) => {
   const show = (id: string, on: boolean) =>
     map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
-  show("ortho", state.imagery === "ortho");
+  show("ortho-duo", state.imagery === "ortho");
+  show("ortho", state.imagery === "natural");
   show("irc", state.imagery === "irc");
-  show("relief", state.mode === "relief");
+  show("relief", state.mode === "relief" && !state.designMap);
   show("hillshade", state.mode === "hillshade");
   show("ign-shade", state.mode === "ign-shade");
   for (const id of ["fields-hit", "fields-line"]) show(id, state.fieldsOn);
@@ -636,6 +655,7 @@ const applyLayers = (map: MapLibreMap) => {
   map.setPaintProperty("ign-shade", "raster-opacity", state.opacity);
   map.setPaintProperty("hillshade", "raster-opacity", state.opacity);
   ui.legend.hidden = state.mode !== "relief";
+  ui.legend.dataset.paused = String(state.designMap);
 };
 
 const applyRange = (map: MapLibreMap, min: number, max: number) => {
@@ -692,7 +712,9 @@ const rememberSections = () => {
   } catch {
     closed = [];
   }
-  for (const d of document.querySelectorAll<HTMLDetailsElement>("details.gx-sec")) {
+  for (const d of document.querySelectorAll<HTMLDetailsElement>(
+    "details.gx-sec",
+  )) {
     if (closed.includes(d.id)) d.open = false;
     d.addEventListener("toggle", () => {
       closed = closed.filter((id) => id !== d.id);
@@ -711,16 +733,18 @@ const bootFailed = (why: string) => {
   ui.boot.dataset.kind = "error";
   const title = ui.boot.querySelector(".gx-boot-title");
   const text = ui.boot.querySelector(".gx-boot-text");
-  if (title) title.textContent = "Signal severed";
+  if (title) title.textContent = "The gaze finds nothing here";
   if (text) text.textContent = why;
 };
 
 const start = async () => {
-  ui.ramp.style.background = reliefGradientCss();
-  ui.collapse.addEventListener("click", () => {
+  ui.ramp.style.background = gaiaReliefGradient();
+  const togglePanel = () => {
     const off = document.body.classList.toggle("panel-off");
     ui.collapse.setAttribute("aria-expanded", String(!off));
-  });
+  };
+  ui.collapse.addEventListener("click", togglePanel);
+  ui.spine.addEventListener("click", togglePanel);
   rememberSections();
 
   let pack: PackManifest;
@@ -819,12 +843,12 @@ const start = async () => {
           : "live"
         : "pack";
     ui.linkText.textContent = linkBroken
-      ? "Signal severed"
+      ? "Live · severed"
       : isLive
         ? busy > 0
-          ? `Live link · ${busy} in flight`
-          : "Live link · IGN"
-        : "Offline pack · Camargue";
+          ? `Live · active · ${busy} in flight`
+          : "Live · idle"
+        : "Pack · active";
   };
   let busyNow = 0;
   onActivity((n) => {
@@ -946,6 +970,10 @@ const start = async () => {
       if (!mcp) return false;
       setSource("live");
       return true;
+    },
+    onDesignMap: (on) => {
+      state.designMap = on;
+      applyLayers(map);
     },
   });
 
@@ -1128,11 +1156,11 @@ const start = async () => {
       s && !Number.isNaN(s.h)
         ? `${formatHeight(s.h)} ${s.source}`
         : "loading heights…",
-      formatLngLat(lng, lat),
-      `L93 ${p.x.toFixed(1)} ${p.y.toFixed(1)}`,
+      latLonDms(lat, lng),
+      l93(p.x, p.y),
     ]
       .filter(Boolean)
-      .join(" · ");
+      .join(" // ");
   };
   map.on("mousemove", (e: MapMouseEvent) =>
     readout(e.lngLat.lng, e.lngLat.lat),
@@ -1220,7 +1248,7 @@ const start = async () => {
     }
     ui.gridInfo.textContent = n
       ? [
-          `${n.toLocaleString("en-GB")} LiDAR cells of 1 m in view (${(n / 1e4).toFixed(1)} ha)`,
+          `${grouped(n, 0)} LiDAR cells of 1 m in view (${(n / 1e4).toFixed(1)} ha)`,
           `${formatHeight(lo)} to ${formatHeight(hi)} · relief ${formatHeight(hi - lo)}`,
           `Median ${formatHeight(p50)} · 1–99 % ${formatHeight(p1)} to ${formatHeight(p99)}`,
           "Heights NGF-IGN69, Lambert-93 grid (EPSG:2154)",

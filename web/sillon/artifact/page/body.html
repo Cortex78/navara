@@ -3,13 +3,18 @@
     <div class="gx-brand">
       <span class="gx-mark" aria-hidden="true"></span>
       <div class="gx-brand-text">
-        <h1 class="gx-wordmark">GAïa <span aria-hidden="true">·</span> Sillon</h1>
-        <p class="gx-sub" id="pack-name">Land instrument · Camargue · LiDAR HD</p>
+        <h1 class="gx-wordmark" aria-label="GAïa Sillon">
+          GAÏA <span class="gx-sep" aria-hidden="true">·</span> SILLON
+        </h1>
+        <p class="gx-sub" id="pack-name">
+          Land instrument · Camargue · LiDAR HD
+        </p>
       </div>
     </div>
     <div class="gx-top-status">
       <span class="gx-status" id="link-status" data-state="pack"
-        ><i aria-hidden="true"></i><span id="link-text">Offline pack</span></span
+        ><i aria-hidden="true"></i
+        ><span id="link-text">Offline pack</span></span
       >
       <span class="gx-datum">L93 · NGF-IGN69</span>
     </div>
@@ -45,9 +50,10 @@
       <div class="gx-frame">
         <p class="gx-boot-title">Acquiring LiDAR grid</p>
         <p class="gx-boot-text">
-          1 m IGN LiDAR HD terrain, orthophotos and farm fields of the
-          Camargue pack.
+          1 m IGN LiDAR HD terrain, orthophotos and farm fields of the Camargue
+          pack.
         </p>
+        <p class="gx-triad" aria-hidden="true">𒀭 𒍃 𒆳</p>
       </div>
     </div>
 
@@ -92,6 +98,16 @@
 
     <button
       type="button"
+      class="gx-btn gx-spine"
+      id="spine"
+      aria-controls="panel"
+      title="Show the instrument panel"
+    >
+      Instrument panel ▸
+    </button>
+
+    <button
+      type="button"
       class="gx-btn gx-exit"
       id="fs-exit"
       title="Exit full screen (F)"
@@ -109,7 +125,8 @@
       <details class="gx-sec" id="sec-field" open>
         <summary id="h-field">
           <span class="gx-sec-title">Field</span
-          ><span class="gx-sec-sub">Target</span>
+          ><span class="gx-sec-sub">Target</span
+          ><span class="gx-cune" aria-hidden="true">𒆠</span>
         </summary>
         <div class="gx-sec-body">
           <div class="gx-tools" role="group" aria-label="Field tools">
@@ -129,9 +146,7 @@
             >
               Profile
             </button>
-            <button type="button" class="gx-btn" id="import-btn">
-              Import
-            </button>
+            <button type="button" class="gx-btn" id="import-btn">Import</button>
           </div>
           <input
             type="file"
@@ -180,7 +195,11 @@
               <button type="button" class="gx-btn" id="field-geojson">
                 GeoJSON
               </button>
-              <button type="button" class="gx-btn gx-btn-quiet" id="field-clear">
+              <button
+                type="button"
+                class="gx-btn gx-btn-quiet"
+                id="field-clear"
+              >
                 Clear
               </button>
             </div>
@@ -191,12 +210,17 @@
       <details class="gx-sec" id="surface" open hidden>
         <summary id="h-surface">
           <span class="gx-sec-title">Surface</span
-          ><span class="gx-sec-sub">Cut / fill</span>
+          ><span class="gx-sec-sub">Cut / fill</span
+          ><span class="gx-cune" aria-hidden="true">𒆳</span>
         </summary>
         <div class="gx-sec-body">
           <div class="gx-row">
             <span class="gx-label" id="sd-mode-label">Design</span>
-            <div class="gx-seg gx-seg-3" role="group" aria-labelledby="sd-mode-label">
+            <div
+              class="gx-seg gx-seg-3"
+              role="group"
+              aria-labelledby="sd-mode-label"
+            >
               <button type="button" id="sd-fit" aria-pressed="true">
                 Natural fall
               </button>
@@ -211,7 +235,11 @@
           <div class="gx-slope" id="sd-slope-box" hidden>
             <label class="gx-num" for="sd-main"
               ><span class="gx-label">Fall %</span
-              ><input id="sd-main" type="number" step="0.01" inputmode="decimal"
+              ><input
+                id="sd-main"
+                type="number"
+                step="0.01"
+                inputmode="decimal"
             /></label>
             <label class="gx-num" for="sd-bearing"
               ><span class="gx-label"
@@ -226,7 +254,11 @@
             /></label>
             <label class="gx-num" for="sd-cross"
               ><span class="gx-label">Cross fall %</span
-              ><input id="sd-cross" type="number" step="0.01" inputmode="decimal"
+              ><input
+                id="sd-cross"
+                type="number"
+                step="0.01"
+                inputmode="decimal"
             /></label>
             <button type="button" class="gx-btn" id="sd-natural">
               Use natural fall
@@ -289,21 +321,22 @@
       <details class="gx-sec" id="sec-map" open>
         <summary id="h-map">
           <span class="gx-sec-title">Map</span
-          ><span class="gx-sec-sub">Source</span>
+          ><span class="gx-sec-sub">Source</span
+          ><span class="gx-cune" aria-hidden="true">𒀭</span>
         </summary>
         <div class="gx-sec-body">
           <div class="gx-row">
             <span class="gx-label" id="data-label">Data</span>
             <div class="gx-seg" role="group" aria-labelledby="data-label">
-              <button type="button" id="src-pack" class="on" aria-pressed="true">
-                Camargue pack
-              </button>
               <button
                 type="button"
-                id="src-live"
-                aria-pressed="false"
-                disabled
+                id="src-pack"
+                class="on"
+                aria-pressed="true"
               >
+                Camargue pack
+              </button>
+              <button type="button" id="src-live" aria-pressed="false" disabled>
                 Live IGN · France
               </button>
             </div>
@@ -324,15 +357,21 @@
           <label class="gx-row" for="imagery">
             <span class="gx-label">Imagery</span>
             <select id="imagery">
-              <option value="ortho">IGN orthophoto · BD ORTHO®</option>
-              <option value="irc">IGN infrared colour</option>
+              <option value="ortho">Orthophoto · GAïa duotone</option>
+              <option value="natural">Orthophoto · natural colour</option>
+              <option value="irc">Infrared colour · IRC</option>
               <option value="none">None</option>
             </select>
           </label>
           <div class="gx-row">
             <span class="gx-label" id="view-label">View</span>
             <div class="gx-seg" role="group" aria-labelledby="view-label">
-              <button type="button" id="view-plan" class="on" aria-pressed="true">
+              <button
+                type="button"
+                id="view-plan"
+                class="on"
+                aria-pressed="true"
+              >
                 Plan
               </button>
               <button type="button" id="view-3d" aria-pressed="false">
@@ -351,7 +390,8 @@
       <details class="gx-sec" id="sec-lidar" open>
         <summary id="h-lidar">
           <span class="gx-sec-title">LiDAR</span
-          ><span class="gx-sec-sub">Render</span>
+          ><span class="gx-sec-sub">Render</span
+          ><span class="gx-cune" aria-hidden="true">𒌓</span>
         </summary>
         <div class="gx-sec-body">
           <label class="gx-row" for="mode">
@@ -376,7 +416,9 @@
           <div class="gx-legend" id="legend">
             <div class="gx-legend-head">
               <span class="gx-label">Elevation · m NGF-IGN69</span>
-              <button type="button" class="gx-link" id="fit">Fit to view</button>
+              <button type="button" class="gx-link" id="fit">
+                Fit to view
+              </button>
             </div>
             <div class="gx-ramp" id="ramp"></div>
             <div class="gx-legend-range">
@@ -389,7 +431,8 @@
       <details class="gx-sec" id="mine" open hidden>
         <summary id="h-mine">
           <span class="gx-sec-title">Archive</span
-          ><span class="gx-sec-sub">My fields</span>
+          ><span class="gx-sec-sub">My fields</span
+          ><span class="gx-cune" aria-hidden="true">𒁾</span>
         </summary>
         <div class="gx-sec-body">
           <ul class="gx-list" id="mine-list"></ul>
@@ -408,7 +451,8 @@
       <details class="gx-sec" id="sec-data">
         <summary id="h-data">
           <span class="gx-sec-title">Data</span
-          ><span class="gx-sec-sub">Telemetry</span>
+          ><span class="gx-sec-sub">Telemetry</span
+          ><span class="gx-cune" aria-hidden="true">𒅆</span>
         </summary>
         <div class="gx-sec-body">
           <button type="button" class="gx-btn gx-btn-primary" id="analyse">
@@ -418,6 +462,8 @@
           <p class="gx-hint" id="pack-info"></p>
         </div>
       </details>
+
+      <p class="gx-sign">The gaze returns.</p>
     </div>
   </aside>
 

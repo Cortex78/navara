@@ -5,7 +5,6 @@ import maplibregl, {
   type SourceSpecification,
 } from "maplibre-gl";
 
-import { formatHeight } from "../../src/app/format";
 import { fieldWindow, type FieldWindow } from "../../src/dem/design";
 import { sampleGrid, type ElevationGrid } from "../../src/dem/elevationGrid";
 import {
@@ -55,6 +54,7 @@ import { OutlineEditor, type EditorKind } from "./outlineEditor";
 import { drawProfileChart, formatDistance } from "./profileChart";
 import { openFieldStore, type FieldStore, type SavedField } from "./store";
 import { installSurface } from "./surface";
+import { grouped, height as formatHeight } from "./units";
 
 /*
  * The field workbench: define a field (pick an RPG parcel, draw, import,
@@ -105,7 +105,19 @@ export const overlayLayers = (): LayerSpecification[] => [
     id: "ov-current-fill",
     type: "fill",
     source: "ov-current",
-    paint: { "fill-color": MAP.signal, "fill-opacity": 0.07 },
+    paint: { "fill-color": MAP.signal, "fill-opacity": 0.06 },
+  },
+  {
+    // The selected field emits light: a blurred halo under a crisp line.
+    id: "ov-current-glow",
+    type: "line",
+    source: "ov-current",
+    paint: {
+      "line-color": MAP.signal,
+      "line-width": 7,
+      "line-blur": 6,
+      "line-opacity": 0.55,
+    },
   },
   {
     id: "ov-current-line",
@@ -163,14 +175,14 @@ export const overlayLayers = (): LayerSpecification[] => [
     type: "fill",
     source: "ov-edit",
     filter: isPolygon,
-    paint: { "fill-color": MAP.cobalt, "fill-opacity": 0.16 },
+    paint: { "fill-color": MAP.signal, "fill-opacity": 0.12 },
   },
   {
     id: "ov-edit-line",
     type: "line",
     source: "ov-edit",
     paint: {
-      "line-color": MAP.cobaltLight,
+      "line-color": MAP.signalLight,
       "line-width": 2,
       "line-dasharray": [2, 1.2],
     },
@@ -190,7 +202,8 @@ export const overlayLayers = (): LayerSpecification[] => [
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-const int = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 });
+/** A whole number, thousands grouped with narrow no-break spaces. */
+const whole = (v: number) => grouped(v, 0);
 
 const polygonOf = (ring: Ring): GeoJSON.Polygon => ({
   type: "Polygon",
@@ -368,6 +381,8 @@ export type WorkbenchContext = {
   colourAuto: () => void;
   /** Switches to Live IGN; false when the connector is not available. */
   useLive: () => boolean;
+  /** The design's cut/fill map went on or off. */
+  onDesignMap?: (on: boolean) => void;
 };
 
 const $ = <T extends HTMLElement>(id: string) => {
@@ -509,6 +524,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     setStatus: ctx.setStatus,
     offerFile: (filename, data) => offerFile(filename, data),
     fieldStem: () => fileStem(current?.name ?? "field"),
+    onMapShown: (on) => ctx.onDesignMap?.(on),
   });
 
   /** The selected field's tag at its top-left bracket. */
@@ -533,7 +549,9 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
   };
 
   /** The field's cells on a pack grid: the 1 m LiDAR square, or the 20 m context. */
-  const packWindow = (f: CurrentField): { w: FieldWindow | null; note: string } => {
+  const packWindow = (
+    f: CurrentField,
+  ): { w: FieldWindow | null; note: string } => {
     const polys = polygonsOf(f.geometry);
     const want = polygonsAreaM2(polys);
     const fine = fieldWindow(ctx.grids.fine, polys);
@@ -582,7 +600,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
         "Area",
         `${ha.toFixed(2)} ha · ${(ha / HA_PER_ACRE).toFixed(2)} ac${f.declaredHa ? ` (${f.declaredHa} ha declared)` : ""}`,
       ],
-      ["Perimeter", `${int.format(ringPerimeterM(f.ring))} m`],
+      ["Perimeter", `${whole(ringPerimeterM(f.ring))} m`],
     ];
     const s = f.stats;
     if (s) {
@@ -602,7 +620,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
             "Natural fall",
             s.slopePct < 0.02
               ? "level (under 0.02 %)"
-              : `${s.slopePct.toFixed(2)} % toward ${compassPoint(s.fallDeg)} · ${int.format(s.slopePct * 100)} cm per 100 m`,
+              : `${s.slopePct.toFixed(2)} % toward ${compassPoint(s.fallDeg)} · ${whole(s.slopePct * 100)} cm per 100 m`,
           ],
           [
             "Evenness",
@@ -696,21 +714,21 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     f.note = "Measuring on IGN LiDAR HD…";
     renderCard();
     drawFall();
-    surface.loading("Loading the field's LiDAR grid for the design…");
+    surface.message("Loading the field's height grid for the design…");
     track(live.fieldGrid(f.geometry.coordinates))
       .then((grid) => {
         if (seq !== measureSeq || current !== f) return;
         const w = fieldWindow(grid, polygonsOf(f.geometry));
-        surface.setField(
-          w,
-          w
-            ? `${grid.source}, ${grid.cellSize} m design grid`
-            : "No LiDAR heights for this field.",
-        );
+        if (w)
+          surface.setField(w, `${grid.source}, ${grid.cellSize} m design grid`);
+        else
+          surface.message(
+            "The field is smaller than one cell of the design grid.",
+          );
       })
       .catch((err) => {
         if (seq === measureSeq && current === f)
-          surface.loading(describeMcpError(err));
+          surface.message(describeMcpError(err));
       });
     track(live.field(f.geometry.coordinates))
       .then((s) => {
@@ -1058,9 +1076,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
         if (!live) throw new Error("Live IGN is off");
         if (length > 10_000)
           throw new Error("Profiles are limited to 10 km in Live IGN.");
-        const r = await track(
-          live.profile(points.map((p) => [p.lng, p.lat])),
-        );
+        const r = await track(live.profile(points.map((p) => [p.lng, p.lat])));
         samples = sampleProfile(points, r.step, () => NaN);
         const n = Math.min(samples.length, r.h.length);
         samples = samples.slice(0, n).map((s, i) => ({

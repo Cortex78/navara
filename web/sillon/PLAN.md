@@ -144,13 +144,54 @@ picks the same modules up when its shell grows a field panel.
 - Carried to later sprints: cadastre overlay and FR/EN strings (S10), ft/yd³
   units and the overlay tile server (S3).
 
-### S3 — Surface design: cut/fill
+### S3 — Surface design: cut/fill ✅ (artifact edition)
 
-- Best-fit plane (least squares, volume-balanced) with slope % and heading; locked slope/heading; a two-way slope plane; a zero-slope plane for rice basins.
-- Cut/fill per cell → volumes (m³, yd³), cut:fill ratio with shrink/swell, cut per ha, max cut/fill, balance solve (offset for a target ratio).
-- Existing and design contours (marching squares) as GeoJSON layers; cut/fill colour styles and band width; flow arrow along the design slope.
-- Readout: `cut 0.10 m (design 1.42)`.
-- Accept: the volumes of a synthetic tilted plane equal the analytic value to 0.1 %.
+- Design surfaces for the selected field (`src/dem/design.ts`): **natural
+  fall** (the robust best-fit plane of S2), **set slope** (a main fall in %
+  toward a bearing plus a cross fall: a two-way plane) and **dead level**
+  (rice basins). Each is balanced to a **cut:fill ratio** (1.0 to 1.5, for
+  shrink and swell) by an exact histogram solve, then raised or lowered by hand
+  in centimetres.
+- Earthworks in ground units (the Lambert-93 scale factor applied): cut, fill,
+  ratio, surplus to haul off or soil to bring in, m³/ha, mean and maximum
+  depths, cut, fill and on-grade areas, and the **mean haul**. The haul is a
+  lower bound: the transport distance between cut and fill projected on eight
+  directions. The distance between the cut and fill centres collapses to zero
+  around a best-fit plane; this bound does not.
+- Map: a cut/fill raster (ember for cut, cyan for fill, 5 cm bands, on grade
+  within ±2 cm), contours of the ground and of the design (marching squares on
+  heights smoothed over about 2 m, automatic interval or 5 to 50 cm), the fall
+  arrow and a haul wire from the cut centre to the fill centre. Elevation
+  colour pauses while the cut/fill map is on.
+- Readout under the cursor: `CUT 0.79 m · ground 0.87 m · design 0.08 m // …`.
+- Cut sheet: a CSV of stakes on a 10 m Lambert-93 lattice (20 m over 50 ha)
+  with existing, design and cut heights. GeoJSON and shapefile exports carry
+  the design and its volumes.
+- Live IGN: `sillon.field_grid()` sends the field's height grid (LiDAR HD, or
+  RGE ALTI® where LiDAR HD covers under half the field or fails to load) at the
+  finest of 0.5 to 5 m that fits 250 000 cells, as deflated int16 deltas. The
+  page runs the same design on it. Edge errors (a field over 4 km², too long
+  for the grid) reach the viewer as plain sentences.
+- GAïa instrument UI: dark-first tokens with a bone daylight variant, imagery
+  graded to the bone/ultramarine duotone, signal blue only for what is
+  selected or active, ember only for intensity readings, Chakra Petch /
+  JetBrains Mono, surveyor typography (true minus, narrow no-break thousands,
+  DMS, L93 E/N), a link register (PACK · ACTIVE, LIVE · IDLE / ACTIVE /
+  SEVERED). Full screen: native where the page may, otherwise an immersive
+  layout; F toggles. The panel collapses to a spine.
+- Verified: TESTCOUNT unit tests, among them the analytic volumes of a field
+  tilted on both axes, the ratio solve, contours, the PNG encoder, the field
+  grid round trip and the haul bound. Headless Chromium under the artifact CSP,
+  desktop and phone, dark and light: the Camargue "Riz" basin (19.83 ha) gives
+  15 136 m³ each way on its natural fall with a mean haul of at least 166 m;
+  dead level at 1.30 gives 18 912 / 14 548 m³; 0.15 % toward 120° at 1.30
+  holds 1.30; raising it 5 cm gives 1.11; 532 contour lines; a 125 kB cut
+  sheet. Live, on a Beauce field (15.25 ha, RGE ALTI® 1 m): 25 665 m³ each way
+  on its natural fall and 54 352 m³ to dead level, against 25 681 / 25 641 and
+  54 345 m³ measured server-side at 0.5 m. The deployed Edge Function (v5)
+  matches the local handlers: identical field statistics, identical grid.
+- Carried to later sprints: ft and yd³ units and a printable cut sheet (S7),
+  design surfaces other than planes (S5).
 
 ### S4 — Drainage and ponding
 
