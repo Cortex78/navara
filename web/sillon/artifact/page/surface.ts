@@ -60,6 +60,9 @@ const MAJOR_EVERY = 5;
 /** Within this of the design, ground counts as on grade (map, areas, readout). */
 const ON_GRADE_M = 0.02;
 
+/** float32 depths: within a micrometre of a class edge counts as on it (cutFillRaster). */
+const EDGE_SLACK_M = 1e-6;
+
 /** Most contour labels on the map at once. */
 const MAX_LABELS = 24;
 
@@ -321,6 +324,7 @@ export const installSurface = (ctx: SurfaceContext) => {
     major: $("sd-major"),
     intervalAuto: $<HTMLOptionElement>("sd-interval-auto"),
     sheetNote: $("sd-sheet-note"),
+    design: $("sd-design"),
   };
 
   const st = {
@@ -555,56 +559,77 @@ export const installSurface = (ctx: SurfaceContext) => {
   let labels: maplibregl.Marker[] = [];
   /**
    * Heights of the ground contours on the map (m NGF-IGN69): each level once,
-   * on its longest line, the heavy levels first, skipping any label that
-   * would overlap one already placed at this zoom.
+   * the heavy levels first, at the first spot along its lines (longest
+   * first) that overlaps no label already placed at this camera.
    */
   const drawLabels = () => {
     for (const m of labels) m.remove();
     labels = [];
     if (!st.showContours || !w) return;
-    const best = new Map<number, { c: GeoJSON.Position[]; major: boolean }>();
+    const byLevel = new Map<
+      number,
+      { lines: GeoJSON.Position[][]; major: boolean }
+    >();
     for (const f of existContours) {
-      if (f.geometry.type !== "LineString") continue;
+      if (f.geometry.type !== "LineString" || f.geometry.coordinates.length < 2)
+        continue;
       const level = Number(f.properties?.level);
-      const c = f.geometry.coordinates;
-      if (c.length > (best.get(level)?.c.length ?? 1))
-        best.set(level, { c, major: !!f.properties?.major });
+      const entry = byLevel.get(level) ?? {
+        lines: [],
+        major: !!f.properties?.major,
+      };
+      entry.lines.push(f.geometry.coordinates);
+      byLevel.set(level, entry);
     }
-    const order = [...best.entries()].sort(
-      ([, a], [, b]) =>
-        Number(b.major) - Number(a.major) || b.c.length - a.c.length,
-    );
+    const order = [...byLevel.entries()]
+      .map(([level, e]) => ({
+        level,
+        major: e.major,
+        lines: e.lines.sort((a, b) => b.length - a.length).slice(0, 6),
+      }))
+      .sort(
+        (a, b) =>
+          Number(b.major) - Number(a.major) ||
+          b.lines[0].length - a.lines[0].length,
+      );
     const placed: { x: number; y: number }[] = [];
-    for (const [level, { c }] of order) {
+    const SPOTS = [0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875];
+    for (const { level, lines } of order) {
       if (labels.length >= MAX_LABELS) break;
-      // Along the line until a free spot: the middle, then the quarters.
-      for (const along of [0.5, 0.25, 0.75]) {
-        const [lng, lat] = c[Math.floor((c.length - 1) * along)];
-        const p = map.project([lng, lat]);
-        if (
-          placed.some(
-            (q) => Math.abs(q.x - p.x) < 40 && Math.abs(q.y - p.y) < 16,
+      let at: GeoJSON.Position | null = null;
+      for (const c of lines) {
+        for (const along of SPOTS) {
+          const q = c[Math.floor((c.length - 1) * along)];
+          const p = map.project([q[0], q[1]]);
+          if (
+            placed.some(
+              (o) => Math.abs(o.x - p.x) < 40 && Math.abs(o.y - p.y) < 16,
+            )
           )
-        )
-          continue;
-        placed.push(p);
-        const el = document.createElement("div");
-        el.className = "gx-clabel";
-        el.textContent = signedFixed(level, 2);
-        // Visual only (the readout gives heights): not a "Map marker" button.
-        el.setAttribute("aria-hidden", "true");
-        el.setAttribute("role", "presentation");
-        el.setAttribute("aria-label", "");
-        labels.push(
-          new maplibregl.Marker({ element: el })
-            .setLngLat([lng, lat])
-            .addTo(map),
-        );
-        break;
+            continue;
+          placed.push(p);
+          at = q;
+          break;
+        }
+        if (at) break;
       }
+      if (!at) continue;
+      const el = document.createElement("div");
+      el.className = "gx-clabel";
+      el.textContent = signedFixed(level, 2);
+      // Visual only (the readout gives heights): not a "Map marker" button.
+      el.setAttribute("aria-hidden", "true");
+      el.setAttribute("role", "presentation");
+      el.setAttribute("aria-label", "");
+      labels.push(
+        new maplibregl.Marker({ element: el })
+          .setLngLat([at[0], at[1]])
+          .addTo(map),
+      );
     }
   };
-  map.on("zoomend", drawLabels);
+  for (const ev of ["zoomend", "rotateend", "pitchend"] as const)
+    map.on(ev, drawLabels);
 
   const pushContours = () => {
     data.contours = collection(
@@ -1058,6 +1083,7 @@ export const installSurface = (ctx: SurfaceContext) => {
     rasterSeq++;
     dropRaster();
     ui.section.hidden = !w;
+    ui.design.hidden = !w;
     ui.sheet.disabled = true;
     if (!w) {
       fit = null;
@@ -1113,6 +1139,7 @@ export const installSurface = (ctx: SurfaceContext) => {
     rasterSeq++;
     dropRaster();
     ui.section.hidden = false;
+    ui.design.hidden = true;
     ui.works.replaceChildren();
     ui.legend.replaceChildren();
     ui.live.textContent = "";
@@ -1141,18 +1168,19 @@ export const installSurface = (ctx: SurfaceContext) => {
     if (col < 0 || row < 0 || col >= width || row >= height) return null;
     const i = row * width + col;
     if (!w.inside[i]) return null;
-    const e = sampleGrid(w.grid, { x, y });
-    if (Number.isNaN(e)) return null;
-    // On grade as the map and the areas decide it (raw depth); the figures
-    // to the centimetre, so the printed cut is ground − design exactly.
-    const raw = e - designHeight(last.plane, x, y);
+    // The cell the map paints here, judged as the painter and the areas do
+    // (its centre's depth, the same edge slack); its figures to the
+    // centimetre, so the printed cut is ground − design exactly.
+    const depth = last.works.depth[i];
+    const e = w.grid.data[i];
+    if (Number.isNaN(depth) || Number.isNaN(e)) return null;
     const ground = Math.round(e * 100) / 100;
-    const z = Math.round(designHeight(last.plane, x, y) * 100) / 100;
+    const z = Math.round((e - depth) * 100) / 100;
     const d = Math.round((ground - z) * 100) / 100;
     const tag =
-      Math.abs(raw) < ON_GRADE_M
+      Math.abs(depth) < ON_GRADE_M - EDGE_SLACK_M
         ? `ON GRADE ±${ON_GRADE_M * 100} cm`
-        : raw > 0
+        : depth > 0
           ? `CUT ${Math.abs(d).toFixed(2)} m`
           : `FILL ${Math.abs(d).toFixed(2)} m`;
     return `${tag} · ground ${fmtHeight(ground)} · design ${fmtHeight(z)}`;

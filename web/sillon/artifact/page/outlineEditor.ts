@@ -100,6 +100,11 @@ export class OutlineEditor {
     this.points.forEach((p, i) => {
       const el = document.createElement("div");
       el.className = "vertex";
+      // A mouse handle (the keyboard places corners at the centre mark and
+      // hears "Corner N placed"): not a "Map marker" button to a reader.
+      el.setAttribute("aria-hidden", "true");
+      el.setAttribute("role", "presentation");
+      el.setAttribute("aria-label", "");
       if (i === 0 && this.drawing && this.closed && n >= 3)
         el.classList.add("closer");
       el.textContent = String(i + 1);

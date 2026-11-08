@@ -1627,6 +1627,12 @@ body.immersive .gx-exit {
   text-transform: none;
 }
 
+/* The design's controls: in the section's own grid, hidden while there is
+   no design (loading, a message). */
+.gx-sd-design {
+  display: contents;
+}
+
 .gx-contour-row {
   display: flex;
   align-items: center;

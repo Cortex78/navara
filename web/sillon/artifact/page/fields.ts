@@ -706,7 +706,12 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
         ? ` · ${Math.round(s.nodataShare * 100)} % of the field has no LiDAR value`
         : "";
     ui.note.textContent = `${f.note}${gaps}`;
+    // Hiding the focused "Try again" would drop focus to the page: hand it
+    // to the note, which says what is happening.
+    const retryHadFocus = document.activeElement === ui.retry;
     ui.retry.hidden = !f.failed;
+    if (retryHadFocus && ui.retry.hidden)
+      ui.note.focus({ preventScroll: true });
     ui.fit.disabled = !s;
     const level = !s?.plane || s.slopePct < 0.02;
     ui.fall.disabled = !s;
@@ -825,7 +830,10 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
       .then((s) => {
         if (seq !== measureSeq || current !== f) return;
         if (s?.areaHa === undefined) {
-          f.note = "No LiDAR heights for this field.";
+          // Measured on 0.5 m cells: a field holding none is too small, not bare.
+          f.note = holdsACell(f, 0.5)
+            ? "No LiDAR heights for this field."
+            : "The field is too small to measure: it holds no 0.5 m cell.";
         } else {
           f.stats = s;
           f.note = `${s.source}, ${s.cellSize} m grid`;
@@ -1159,6 +1167,8 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
   };
   ui.drawerClose.addEventListener("click", closeProfile);
   ui.retry.addEventListener("click", () => measure());
+  // A target for focus when the retry button hides itself.
+  ui.note.tabIndex = -1;
   ui.drawerCsv.addEventListener("click", () => {
     if (profileSamples.length)
       void offerFile(`profile-${stamp()}.csv`, profileCsv(profileSamples));

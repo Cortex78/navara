@@ -197,7 +197,10 @@ picks the same modules up when its shell grows a field panel.
   them the balance read against the target ratio (shrinkage is not surplus),
   the hand-set design kept when a field is measured again, the first
   data-source switch, keyboard selection of a field at a centre mark, and
-  duotone shaded relief.
+  duotone shaded relief. Two further passes re-ran every reproduction on the
+  fixed build and closed what they found (design ownership between fields,
+  the keyboard mark above the phone sheet, the saturated legend class,
+  contour labels, cut-sheet rounding, a retry on failed live calls).
 - Carried to later sprints: ft and yd³ units and a printable cut sheet (S7),
   design surfaces other than planes (S5).
 

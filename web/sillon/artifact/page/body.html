@@ -252,115 +252,117 @@
           ><span class="gx-cune" aria-hidden="true">𒆳</span>
         </summary>
         <div class="gx-sec-body">
-          <div class="gx-row">
-            <span class="gx-label" id="sd-mode-label">Design</span>
-            <div
-              class="gx-seg gx-seg-3"
-              role="group"
-              aria-labelledby="sd-mode-label"
-            >
-              <button type="button" id="sd-fit" aria-pressed="true">
-                Natural fall
-              </button>
-              <button type="button" id="sd-slope" aria-pressed="false">
-                Set slope
-              </button>
-              <button type="button" id="sd-level" aria-pressed="false">
-                Dead level
+          <p class="gx-hint" id="sd-note" role="status"></p>
+          <div class="gx-sd-design" id="sd-design">
+            <div class="gx-row">
+              <span class="gx-label" id="sd-mode-label">Design</span>
+              <div
+                class="gx-seg gx-seg-3"
+                role="group"
+                aria-labelledby="sd-mode-label"
+              >
+                <button type="button" id="sd-fit" aria-pressed="true">
+                  Natural fall
+                </button>
+                <button type="button" id="sd-slope" aria-pressed="false">
+                  Set slope
+                </button>
+                <button type="button" id="sd-level" aria-pressed="false">
+                  Dead level
+                </button>
+              </div>
+            </div>
+            <div class="gx-slope" id="sd-slope-box" hidden>
+              <label class="gx-num" for="sd-main"
+                ><span class="gx-label">Fall %</span
+                ><input
+                  id="sd-main"
+                  type="number"
+                  step="0.01"
+                  inputmode="decimal"
+              /></label>
+              <label class="gx-num" for="sd-bearing"
+                ><span class="gx-label"
+                  >Toward ° <b id="sd-compass" class="gx-compass"></b></span
+                ><input
+                  id="sd-bearing"
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="359"
+                  inputmode="numeric"
+              /></label>
+              <label class="gx-num" for="sd-cross"
+                ><span class="gx-label">Cross fall %</span
+                ><input
+                  id="sd-cross"
+                  type="number"
+                  step="0.01"
+                  inputmode="decimal"
+              /></label>
+              <button type="button" class="gx-btn" id="sd-natural">
+                Use natural fall
               </button>
             </div>
-          </div>
-          <div class="gx-slope" id="sd-slope-box" hidden>
-            <label class="gx-num" for="sd-main"
-              ><span class="gx-label">Fall %</span
-              ><input
-                id="sd-main"
-                type="number"
-                step="0.01"
-                inputmode="decimal"
-            /></label>
-            <label class="gx-num" for="sd-bearing"
-              ><span class="gx-label"
-                >Toward ° <b id="sd-compass" class="gx-compass"></b></span
-              ><input
-                id="sd-bearing"
-                type="number"
+            <label class="gx-row" for="sd-ratio">
+              <span class="gx-label">Cut : fill</span>
+              <select id="sd-ratio">
+                <option value="1">1.00 · balanced</option>
+                <option value="1.1">1.10</option>
+                <option value="1.2">1.20 · light compaction</option>
+                <option value="1.3">1.30 · loam</option>
+                <option value="1.5">1.50 · heavy clay</option>
+              </select>
+            </label>
+            <label class="gx-row gx-slider" for="sd-offset">
+              <span class="gx-label">Raise / lower</span
+              ><output id="sd-offset-out" for="sd-offset">±0 cm</output>
+              <input
+                type="range"
+                id="sd-offset"
+                min="-30"
+                max="30"
                 step="1"
-                min="0"
-                max="359"
-                inputmode="numeric"
-            /></label>
-            <label class="gx-num" for="sd-cross"
-              ><span class="gx-label">Cross fall %</span
-              ><input
-                id="sd-cross"
-                type="number"
-                step="0.01"
-                inputmode="decimal"
-            /></label>
-            <button type="button" class="gx-btn" id="sd-natural">
-              Use natural fall
+                value="0"
+              />
+            </label>
+            <dl class="gx-reg" id="sd-works"></dl>
+            <div class="gx-chips" role="group" aria-label="Surface layers">
+              <label class="gx-chip"
+                ><input type="checkbox" id="sd-map" checked /><span
+                  >Cut / fill map</span
+                ></label
+              >
+              <label class="gx-chip"
+                ><input type="checkbox" id="sd-contours" checked /><span
+                  >Contours</span
+                ></label
+              >
+            </div>
+            <div class="gx-contour-row" id="sd-contour-row">
+              <p class="gx-contour-key" id="sd-contour-key">
+                <span class="ck ck-exist" aria-hidden="true"></span>ground
+                <span class="ck ck-design" aria-hidden="true"></span>design
+                <span id="sd-major"></span>
+              </p>
+              <label class="gx-select-sm" for="sd-interval"
+                ><span class="gx-label">Interval</span>
+                <select id="sd-interval">
+                  <option value="auto" id="sd-interval-auto">Auto</option>
+                  <option value="5">5 cm</option>
+                  <option value="10">10 cm</option>
+                  <option value="20">20 cm</option>
+                  <option value="25">25 cm</option>
+                  <option value="50">50 cm</option>
+                </select></label
+              >
+            </div>
+            <div class="gx-cf-legend" id="sd-legend"></div>
+            <button type="button" class="gx-btn" id="sd-sheet">
+              Cut sheet · CSV of stakes
             </button>
+            <p class="gx-hint" id="sd-sheet-note"></p>
           </div>
-          <label class="gx-row" for="sd-ratio">
-            <span class="gx-label">Cut : fill</span>
-            <select id="sd-ratio">
-              <option value="1">1.00 · balanced</option>
-              <option value="1.1">1.10</option>
-              <option value="1.2">1.20 · light compaction</option>
-              <option value="1.3">1.30 · loam</option>
-              <option value="1.5">1.50 · heavy clay</option>
-            </select>
-          </label>
-          <label class="gx-row gx-slider" for="sd-offset">
-            <span class="gx-label">Raise / lower</span
-            ><output id="sd-offset-out" for="sd-offset">±0 cm</output>
-            <input
-              type="range"
-              id="sd-offset"
-              min="-30"
-              max="30"
-              step="1"
-              value="0"
-            />
-          </label>
-          <dl class="gx-reg" id="sd-works"></dl>
-          <div class="gx-chips" role="group" aria-label="Surface layers">
-            <label class="gx-chip"
-              ><input type="checkbox" id="sd-map" checked /><span
-                >Cut / fill map</span
-              ></label
-            >
-            <label class="gx-chip"
-              ><input type="checkbox" id="sd-contours" checked /><span
-                >Contours</span
-              ></label
-            >
-          </div>
-          <div class="gx-contour-row" id="sd-contour-row">
-            <p class="gx-contour-key" id="sd-contour-key">
-              <span class="ck ck-exist" aria-hidden="true"></span>ground
-              <span class="ck ck-design" aria-hidden="true"></span>design
-              <span id="sd-major"></span>
-            </p>
-            <label class="gx-select-sm" for="sd-interval"
-              ><span class="gx-label">Interval</span>
-              <select id="sd-interval">
-                <option value="auto" id="sd-interval-auto">Auto</option>
-                <option value="5">5 cm</option>
-                <option value="10">10 cm</option>
-                <option value="20">20 cm</option>
-                <option value="25">25 cm</option>
-                <option value="50">50 cm</option>
-              </select></label
-            >
-          </div>
-          <div class="gx-cf-legend" id="sd-legend"></div>
-          <p class="gx-hint" id="sd-note" role="status"></p>
-          <button type="button" class="gx-btn" id="sd-sheet">
-            Cut sheet · CSV of stakes
-          </button>
-          <p class="gx-hint" id="sd-sheet-note"></p>
         </div>
       </details>
 

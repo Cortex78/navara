@@ -110,6 +110,8 @@ const ui = {
   opacityOut: $("opacity-out"),
   mapLive: $("map-live"),
   kbdMark: $("kbd-mark"),
+  drawer: $("drawer"),
+  copybox: $("copybox"),
   stretch: $<HTMLInputElement>("stretch"),
   stretchOut: $("stretch-out"),
   legend: $("legend"),
@@ -786,6 +788,8 @@ const bootFailed = (why: string) => {
 
 const start = async () => {
   ui.ramp.style.background = gaiaReliefGradient();
+  /** Places the keyboard centre mark; real once the map exists (below). */
+  let placeMark = () => {};
   const togglePanel = () => {
     const off = document.body.classList.toggle("panel-off");
     ui.collapse.setAttribute("aria-expanded", String(!off));
@@ -1261,10 +1265,16 @@ const start = async () => {
     "aria-label",
     "Map. Arrow keys move it, plus and minus zoom. Enter selects the farm field under the centre mark; while drawing, Space places a corner there and Enter finishes.",
   );
-  /** Said where it can be heard: the panel (and its status line) may be hidden. */
+  const panelHidden = () =>
+    document.body.classList.contains("panel-off") ||
+    document.body.classList.contains("immersive");
+  /**
+   * Said where it can be heard, once: the status line while the panel is
+   * shown, a live region on the map while it is hidden.
+   */
   const announce = (text: string) => {
-    ui.mapLive.textContent = text;
-    setStatus(text, "info");
+    if (panelHidden()) ui.mapLive.textContent = text;
+    else setStatus(text, "info");
   };
   /**
    * The mark's point, in map pixels: the middle of the map that can be seen,
@@ -1272,28 +1282,34 @@ const start = async () => {
    */
   const markPoint = () => {
     const m = map.getContainer().getBoundingClientRect();
-    const sheet =
-      narrow.matches &&
-      !document.body.classList.contains("panel-off") &&
-      !document.body.classList.contains("immersive")
-        ? ui.panel.getBoundingClientRect().top
-        : m.bottom;
-    const bottom = Math.max(m.top + 40, Math.min(m.bottom, sheet));
+    let top = m.top;
+    let bottom = m.bottom;
+    if (narrow.matches) {
+      if (!panelHidden())
+        bottom = Math.min(bottom, ui.panel.getBoundingClientRect().top);
+      // The profile drawer and the copy box sit over the top of the map.
+      for (const el of [ui.drawer, ui.copybox])
+        if (!el.hidden) top = Math.max(top, el.getBoundingClientRect().bottom);
+      if (bottom - top < 40)
+        [top, bottom] = [m.top, Math.max(m.top + 40, bottom)];
+    }
     return {
       x: m.width / 2,
-      y: (bottom - m.top) / 2,
+      y: (top + bottom) / 2 - m.top,
       cover: m.bottom - bottom,
     };
   };
-  const placeMark = () => {
+  placeMark = () => {
     const p = markPoint();
     ui.kbdMark.style.left = `${p.x}px`;
     ui.kbdMark.style.top = `${p.y}px`;
     // The map's focus frame stops where the sheet starts, too.
     map.getContainer().style.setProperty("--sheet-cover", `${p.cover}px`);
   };
-  canvas.addEventListener("focus", placeMark);
-  window.addEventListener("resize", placeMark);
+  canvas.addEventListener("focus", () => placeMark());
+  window.addEventListener("resize", () => placeMark());
+  // The map's own box changes too: full screen, immersive mode, the panel.
+  map.on("resize", () => placeMark());
   canvas.addEventListener("keydown", (e) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key !== "Enter" && e.key !== " ") return;
@@ -1332,7 +1348,10 @@ const start = async () => {
     }
     workbench.selectRpg(f);
     const props = (f.properties ?? {}) as { crop?: string; ha?: number };
-    ui.mapLive.textContent = `Selected ${props.crop ?? "a field"}${typeof props.ha === "number" ? `, ${props.ha} ha declared` : ""}.`;
+    // A stale "no field here" goes; the card speaks for itself when shown.
+    setStatus("");
+    if (panelHidden())
+      ui.mapLive.textContent = `Selected ${props.crop ?? "a field"}${typeof props.ha === "number" ? `, ${props.ha} ha declared` : ""}.`;
   });
 
   // ── RPG fields ──
