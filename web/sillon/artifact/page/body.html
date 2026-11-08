@@ -1,189 +1,428 @@
-<div id="map" aria-label="Map of the field pack"></div>
-
-<aside class="panel" id="panel">
-  <header class="brand">
-    <span class="mark" aria-hidden="true"></span>
-    <div>
-      <h1>Sillon</h1>
-      <p class="pack-name" id="pack-name">Camargue rice basins · LiDAR HD</p>
+<div class="gx-app" id="app">
+  <header class="gx-topbar" id="topbar">
+    <div class="gx-brand">
+      <span class="gx-mark" aria-hidden="true"></span>
+      <div class="gx-brand-text">
+        <h1 class="gx-wordmark">GAïa <span aria-hidden="true">·</span> Sillon</h1>
+        <p class="gx-sub" id="pack-name">Land instrument · Camargue · LiDAR HD</p>
+      </div>
     </div>
+    <div class="gx-top-status">
+      <span class="gx-status" id="link-status" data-state="pack"
+        ><i aria-hidden="true"></i><span id="link-text">Offline pack</span></span
+      >
+      <span class="gx-datum">L93 · NGF-IGN69</span>
+    </div>
+    <div class="gx-top-actions">
+      <button
+        type="button"
+        class="gx-btn gx-btn-quiet"
+        id="fs-btn"
+        aria-pressed="false"
+        title="Full screen (F)"
+      >
+        <span class="gx-ico gx-ico-fs" aria-hidden="true"></span
+        ><span data-label>Full screen</span>
+      </button>
+      <button
+        type="button"
+        class="gx-btn gx-btn-quiet"
+        id="collapse"
+        aria-expanded="true"
+        aria-controls="panel"
+        title="Show or hide the panel"
+      >
+        <span class="gx-ico gx-ico-panel" aria-hidden="true"></span
+        ><span>Panel</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="gx-stage" id="stage">
+    <div id="map" aria-label="Map of the field and its LiDAR terrain"></div>
+
+    <div class="gx-boot" id="boot" role="status">
+      <div class="gx-frame">
+        <p class="gx-boot-title">Acquiring LiDAR grid</p>
+        <p class="gx-boot-text">
+          1 m IGN LiDAR HD terrain, orthophotos and farm fields of the
+          Camargue pack.
+        </p>
+      </div>
+    </div>
+
+    <div
+      class="gx-toolbar"
+      id="toolbar"
+      role="toolbar"
+      aria-label="Drawing"
+      hidden
+    >
+      <span id="toolbar-text"></span>
+      <div class="gx-toolbar-btns">
+        <button type="button" class="gx-btn" id="tool-undo">Undo</button>
+        <button type="button" class="gx-btn" id="tool-cancel">Cancel</button>
+        <button type="button" class="gx-btn gx-btn-primary" id="tool-done">
+          Done
+        </button>
+      </div>
+    </div>
+
+    <section
+      class="gx-drawer gx-frame"
+      id="drawer"
+      aria-labelledby="drawer-title"
+      hidden
+    >
+      <header class="gx-drawer-head">
+        <h2 id="drawer-title">Elevation profile</h2>
+        <button type="button" class="gx-btn" id="drawer-csv">CSV</button>
+        <button
+          type="button"
+          class="gx-btn gx-btn-icon"
+          id="drawer-close"
+          aria-label="Close the profile"
+        >
+          ×
+        </button>
+      </header>
+      <p class="gx-drawer-stats" id="drawer-stats"></p>
+      <div class="gx-chart-host" id="chart"></div>
+    </section>
+
     <button
       type="button"
-      class="collapse"
-      id="collapse"
-      aria-expanded="true"
-      aria-controls="panel-body"
-      title="Collapse panel"
+      class="gx-btn gx-exit"
+      id="fs-exit"
+      title="Exit full screen (F)"
     >
-      <span aria-hidden="true">–</span>
+      Exit full screen
     </button>
-  </header>
+  </main>
 
-  <div class="panel-body" id="panel-body">
-    <p class="status" id="status" role="status">Loading the LiDAR pack…</p>
-
-    <section aria-labelledby="h-map">
-      <h2 id="h-map">Map</h2>
-      <div class="field" role="group" aria-label="Data">
-        <span>Data</span>
-        <div class="seg">
-          <button type="button" id="src-pack" class="on" aria-pressed="true">
-            Camargue pack
-          </button>
-          <button type="button" id="src-live" aria-pressed="false" disabled>
-            Live IGN · France
-          </button>
-        </div>
-      </div>
-      <p class="hint" id="live-status">Checking for your Supabase connector…</p>
-      <form class="row" id="goto-form">
-        <label class="sr" for="goto">Go to</label>
-        <input
-          id="goto"
-          type="search"
-          placeholder="43.585, 4.553 or 825500 6277500"
-          autocomplete="off"
-        />
-        <button type="submit" id="goto-go">Go</button>
-      </form>
-      <label class="field" for="imagery">
-        <span>Imagery</span>
-        <select id="imagery">
-          <option value="ortho">IGN orthophoto (BD ORTHO®)</option>
-          <option value="irc">IGN infrared colour</option>
-          <option value="none">None</option>
-        </select>
-      </label>
-      <div class="field" role="group" aria-label="View">
-        <span>View</span>
-        <div class="seg">
-          <button type="button" id="view-plan" class="on" aria-pressed="true">
-            Plan
-          </button>
-          <button type="button" id="view-3d" aria-pressed="false">3D</button>
-        </div>
-      </div>
-      <label class="check" for="fields-on">
-        <input type="checkbox" id="fields-on" checked />
-        <span>Farm fields (RPG) — click one to measure it</span>
-      </label>
-    </section>
-
-    <section aria-labelledby="h-lidar">
-      <h2 id="h-lidar">LiDAR</h2>
-      <label class="field" for="mode">
-        <span>Rendering</span>
-        <select id="mode">
-          <option value="relief">Elevation colour</option>
-          <option value="hillshade">Shaded relief</option>
-          <option value="ign-shade">IGN shaded relief</option>
-          <option value="off">Off</option>
-        </select>
-      </label>
-      <label class="field" for="opacity">
-        <span>LiDAR</span><output id="opacity-out" for="opacity">70 %</output>
-        <input type="range" id="opacity" min="0" max="100" value="70" />
-      </label>
-      <label class="field" for="stretch">
-        <span>Height stretch</span
-        ><output id="stretch-out" for="stretch">1×</output>
-        <input type="range" id="stretch" min="1" max="30" value="1" />
-      </label>
-      <div class="legend" id="legend">
-        <div class="legend-head">
-          <span>Elevation, m NGF-IGN69</span>
-          <button type="button" class="link" id="fit">Fit to view</button>
-        </div>
-        <div class="ramp" id="ramp"></div>
-        <div class="legend-range">
-          <span id="range-min">–</span><span id="range-max">–</span>
-        </div>
-      </div>
-    </section>
-
-    <section aria-labelledby="h-field">
-      <h2 id="h-field">Field</h2>
-      <div class="tools" role="group" aria-label="Field tools">
-        <button type="button" id="draw-field" aria-pressed="false">
-          Draw a field
-        </button>
-        <button type="button" id="draw-profile" aria-pressed="false">
-          Profile
-        </button>
-        <button type="button" id="import-btn">Import…</button>
-      </div>
-      <input
-        type="file"
-        id="import-file"
-        accept=".geojson,.json,.kml,.kmz,.zip,.shp"
-        hidden
-      />
-      <p class="hint" id="field-hint">
-        Click a farm field (RPG), draw your own, or import a GeoJSON, KML or
-        zipped shapefile. Sillon reads its area, natural fall and levelling
-        volumes from the LiDAR grid.
+  <aside class="gx-panel" id="panel" aria-label="Instrument panel">
+    <div class="gx-panel-body" id="panel-body">
+      <p class="gx-statusline" id="status" role="status">
+        Loading the LiDAR pack…
       </p>
-      <div id="field-card" class="card" hidden>
-        <label class="sr" for="field-name">Field name</label>
-        <input id="field-name" class="name" type="text" maxlength="80" />
-        <p class="crop" id="field-crop"></p>
-        <dl class="stats" id="field-stats"></dl>
-        <p class="hint" id="field-note"></p>
-        <div class="btns">
-          <button type="button" id="field-fall">Profile down the fall</button>
-          <button type="button" id="field-fit">Colour to field</button>
-          <button type="button" id="field-edit">Edit outline</button>
-          <button type="button" id="field-save" hidden>
-            Save to My fields
-          </button>
-          <button type="button" id="field-shp">Shapefile + KML</button>
-          <button type="button" id="field-geojson">GeoJSON</button>
-          <button type="button" id="field-clear">Clear</button>
+
+      <details class="gx-sec" id="sec-field" open>
+        <summary id="h-field">
+          <span class="gx-sec-title">Field</span
+          ><span class="gx-sec-sub">Target</span>
+        </summary>
+        <div class="gx-sec-body">
+          <div class="gx-tools" role="group" aria-label="Field tools">
+            <button
+              type="button"
+              class="gx-btn"
+              id="draw-field"
+              aria-pressed="false"
+            >
+              Draw field
+            </button>
+            <button
+              type="button"
+              class="gx-btn"
+              id="draw-profile"
+              aria-pressed="false"
+            >
+              Profile
+            </button>
+            <button type="button" class="gx-btn" id="import-btn">
+              Import
+            </button>
+          </div>
+          <input
+            type="file"
+            id="import-file"
+            accept=".geojson,.json,.kml,.kmz,.zip,.shp"
+            hidden
+          />
+          <p class="gx-hint" id="field-hint">
+            Click a farm field on the map, draw one, or import a GeoJSON, KML or
+            zipped shapefile. Sillon reads its area, natural fall and levelling
+            volumes from the LiDAR grid.
+          </p>
+          <div class="gx-card" id="field-card" hidden>
+            <label class="sr" for="field-name">Field name</label>
+            <input
+              id="field-name"
+              class="gx-name"
+              type="text"
+              maxlength="80"
+              autocomplete="off"
+            />
+            <p class="gx-crop" id="field-crop"></p>
+            <dl class="gx-reg" id="field-stats"></dl>
+            <p class="gx-hint" id="field-note"></p>
+            <div class="gx-actions">
+              <button type="button" class="gx-btn" id="field-fall">
+                Profile down the fall
+              </button>
+              <button type="button" class="gx-btn" id="field-fit">
+                Colour to field
+              </button>
+              <button type="button" class="gx-btn" id="field-edit">
+                Edit outline
+              </button>
+              <button
+                type="button"
+                class="gx-btn gx-btn-primary"
+                id="field-save"
+                hidden
+              >
+                Save to My fields
+              </button>
+              <button type="button" class="gx-btn" id="field-shp">
+                Shapefile + KML
+              </button>
+              <button type="button" class="gx-btn" id="field-geojson">
+                GeoJSON
+              </button>
+              <button type="button" class="gx-btn gx-btn-quiet" id="field-clear">
+                Clear
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+      </details>
 
-    <section aria-labelledby="h-mine" id="mine" hidden>
-      <h2 id="h-mine">My fields</h2>
-      <ul class="mine" id="mine-list"></ul>
-      <p class="hint" id="mine-status"></p>
-      <div class="row">
-        <button type="button" id="mine-shp">All as shapefile</button>
-        <button type="button" id="mine-geojson">GeoJSON</button>
-      </div>
-    </section>
+      <details class="gx-sec" id="surface" open hidden>
+        <summary id="h-surface">
+          <span class="gx-sec-title">Surface</span
+          ><span class="gx-sec-sub">Cut / fill</span>
+        </summary>
+        <div class="gx-sec-body">
+          <div class="gx-row">
+            <span class="gx-label" id="sd-mode-label">Design</span>
+            <div class="gx-seg gx-seg-3" role="group" aria-labelledby="sd-mode-label">
+              <button type="button" id="sd-fit" aria-pressed="true">
+                Natural fall
+              </button>
+              <button type="button" id="sd-slope" aria-pressed="false">
+                Set slope
+              </button>
+              <button type="button" id="sd-level" aria-pressed="false">
+                Dead level
+              </button>
+            </div>
+          </div>
+          <div class="gx-slope" id="sd-slope-box" hidden>
+            <label class="gx-num" for="sd-main"
+              ><span class="gx-label">Fall %</span
+              ><input id="sd-main" type="number" step="0.01" inputmode="decimal"
+            /></label>
+            <label class="gx-num" for="sd-bearing"
+              ><span class="gx-label"
+                >Toward ° <b id="sd-compass" class="gx-compass"></b></span
+              ><input
+                id="sd-bearing"
+                type="number"
+                step="1"
+                min="0"
+                max="359"
+                inputmode="numeric"
+            /></label>
+            <label class="gx-num" for="sd-cross"
+              ><span class="gx-label">Cross fall %</span
+              ><input id="sd-cross" type="number" step="0.01" inputmode="decimal"
+            /></label>
+            <button type="button" class="gx-btn" id="sd-natural">
+              Use natural fall
+            </button>
+          </div>
+          <label class="gx-row" for="sd-ratio">
+            <span class="gx-label">Cut : fill</span>
+            <select id="sd-ratio">
+              <option value="1">1.00 · balanced</option>
+              <option value="1.1">1.10</option>
+              <option value="1.2">1.20 · light compaction</option>
+              <option value="1.3">1.30 · loam</option>
+              <option value="1.5">1.50 · heavy clay</option>
+            </select>
+          </label>
+          <label class="gx-row gx-slider" for="sd-offset">
+            <span class="gx-label">Raise / lower</span
+            ><output id="sd-offset-out" for="sd-offset">±0 cm</output>
+            <input
+              type="range"
+              id="sd-offset"
+              min="-30"
+              max="30"
+              step="1"
+              value="0"
+            />
+          </label>
+          <dl class="gx-reg" id="sd-works"></dl>
+          <div class="gx-chips" role="group" aria-label="Surface layers">
+            <label class="gx-chip"
+              ><input type="checkbox" id="sd-map" checked /><span
+                >Cut / fill map</span
+              ></label
+            >
+            <label class="gx-chip"
+              ><input type="checkbox" id="sd-contours" checked /><span
+                >Contours</span
+              ></label
+            >
+            <label class="gx-select-sm" for="sd-interval"
+              ><span class="sr">Contour interval</span>
+              <select id="sd-interval">
+                <option value="auto">Auto</option>
+                <option value="5">5 cm</option>
+                <option value="10">10 cm</option>
+                <option value="20">20 cm</option>
+                <option value="25">25 cm</option>
+                <option value="50">50 cm</option>
+              </select></label
+            >
+          </div>
+          <div class="gx-cf-legend" id="sd-legend"></div>
+          <p class="gx-hint" id="sd-note"></p>
+          <button type="button" class="gx-btn" id="sd-sheet">
+            Cut sheet · CSV of stakes
+          </button>
+        </div>
+      </details>
 
-    <section aria-labelledby="h-data">
-      <h2 id="h-data">Data</h2>
-      <button type="button" class="primary" id="analyse">
-        Analyse the view
-      </button>
-      <pre class="grid-info" id="grid-info"></pre>
-      <p class="hint" id="pack-info"></p>
-    </section>
-  </div>
-</aside>
+      <details class="gx-sec" id="sec-map" open>
+        <summary id="h-map">
+          <span class="gx-sec-title">Map</span
+          ><span class="gx-sec-sub">Source</span>
+        </summary>
+        <div class="gx-sec-body">
+          <div class="gx-row">
+            <span class="gx-label" id="data-label">Data</span>
+            <div class="gx-seg" role="group" aria-labelledby="data-label">
+              <button type="button" id="src-pack" class="on" aria-pressed="true">
+                Camargue pack
+              </button>
+              <button
+                type="button"
+                id="src-live"
+                aria-pressed="false"
+                disabled
+              >
+                Live IGN · France
+              </button>
+            </div>
+          </div>
+          <p class="gx-hint" id="live-status">
+            Checking for your Supabase connector…
+          </p>
+          <form class="gx-goto" id="goto-form">
+            <label class="sr" for="goto">Go to</label>
+            <input
+              id="goto"
+              type="search"
+              placeholder="43.585, 4.553 or 825500 6277500"
+              autocomplete="off"
+            />
+            <button type="submit" class="gx-btn" id="goto-go">Go</button>
+          </form>
+          <label class="gx-row" for="imagery">
+            <span class="gx-label">Imagery</span>
+            <select id="imagery">
+              <option value="ortho">IGN orthophoto · BD ORTHO®</option>
+              <option value="irc">IGN infrared colour</option>
+              <option value="none">None</option>
+            </select>
+          </label>
+          <div class="gx-row">
+            <span class="gx-label" id="view-label">View</span>
+            <div class="gx-seg" role="group" aria-labelledby="view-label">
+              <button type="button" id="view-plan" class="on" aria-pressed="true">
+                Plan
+              </button>
+              <button type="button" id="view-3d" aria-pressed="false">
+                3D
+              </button>
+            </div>
+          </div>
+          <label class="gx-chip gx-chip-wide" for="fields-on"
+            ><input type="checkbox" id="fields-on" checked /><span
+              >Farm fields · RPG</span
+            ></label
+          >
+        </div>
+      </details>
 
-<div class="toolbar" id="toolbar" role="toolbar" aria-label="Drawing" hidden>
-  <span id="toolbar-text"></span>
-  <div class="toolbar-btns">
-    <button type="button" id="tool-undo">Undo</button>
-    <button type="button" id="tool-cancel">Cancel</button>
-    <button type="button" id="tool-done" class="primary">Done</button>
-  </div>
+      <details class="gx-sec" id="sec-lidar" open>
+        <summary id="h-lidar">
+          <span class="gx-sec-title">LiDAR</span
+          ><span class="gx-sec-sub">Render</span>
+        </summary>
+        <div class="gx-sec-body">
+          <label class="gx-row" for="mode">
+            <span class="gx-label">Rendering</span>
+            <select id="mode">
+              <option value="relief">Elevation colour</option>
+              <option value="hillshade">Shaded relief</option>
+              <option value="ign-shade">IGN shaded relief</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <label class="gx-row gx-slider" for="opacity">
+            <span class="gx-label">Opacity</span
+            ><output id="opacity-out" for="opacity">70 %</output>
+            <input type="range" id="opacity" min="0" max="100" value="70" />
+          </label>
+          <label class="gx-row gx-slider" for="stretch">
+            <span class="gx-label">Height stretch</span
+            ><output id="stretch-out" for="stretch">1×</output>
+            <input type="range" id="stretch" min="1" max="30" value="1" />
+          </label>
+          <div class="gx-legend" id="legend">
+            <div class="gx-legend-head">
+              <span class="gx-label">Elevation · m NGF-IGN69</span>
+              <button type="button" class="gx-link" id="fit">Fit to view</button>
+            </div>
+            <div class="gx-ramp" id="ramp"></div>
+            <div class="gx-legend-range">
+              <span id="range-min">–</span><span id="range-max">–</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="gx-sec" id="mine" open hidden>
+        <summary id="h-mine">
+          <span class="gx-sec-title">Archive</span
+          ><span class="gx-sec-sub">My fields</span>
+        </summary>
+        <div class="gx-sec-body">
+          <ul class="gx-list" id="mine-list"></ul>
+          <p class="gx-hint" id="mine-status"></p>
+          <div class="gx-pair">
+            <button type="button" class="gx-btn" id="mine-shp">
+              All · shapefile
+            </button>
+            <button type="button" class="gx-btn" id="mine-geojson">
+              All · GeoJSON
+            </button>
+          </div>
+        </div>
+      </details>
+
+      <details class="gx-sec" id="sec-data">
+        <summary id="h-data">
+          <span class="gx-sec-title">Data</span
+          ><span class="gx-sec-sub">Telemetry</span>
+        </summary>
+        <div class="gx-sec-body">
+          <button type="button" class="gx-btn gx-btn-primary" id="analyse">
+            Analyse the view
+          </button>
+          <pre class="gx-pre" id="grid-info"></pre>
+          <p class="gx-hint" id="pack-info"></p>
+        </div>
+      </details>
+    </div>
+  </aside>
+
+  <footer class="gx-statusbar" id="statusbar">
+    <p class="gx-readout" id="readout">Move over the map to read heights</p>
+    <p class="gx-badge" id="badge"></p>
+  </footer>
 </div>
-
-<section class="drawer" id="drawer" aria-labelledby="drawer-title" hidden>
-  <header class="drawer-head">
-    <h2 id="drawer-title">Elevation profile</h2>
-    <button type="button" id="drawer-csv">CSV</button>
-    <button type="button" id="drawer-close" aria-label="Close the profile">
-      ×
-    </button>
-  </header>
-  <p class="drawer-stats" id="drawer-stats"></p>
-  <div class="chart-host" id="chart"></div>
-</section>
-
-<div class="readout" id="readout" hidden></div>
-<div class="badge" id="badge"></div>

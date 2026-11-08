@@ -1,11 +1,12 @@
-import type {
-  GeoJSONSource,
-  LayerSpecification,
-  Map as MapLibreMap,
-  SourceSpecification,
+import maplibregl, {
+  type GeoJSONSource,
+  type LayerSpecification,
+  type Map as MapLibreMap,
+  type SourceSpecification,
 } from "maplibre-gl";
 
 import { formatHeight } from "../../src/app/format";
+import { fieldWindow, type FieldWindow } from "../../src/dem/design";
 import { sampleGrid, type ElevationGrid } from "../../src/dem/elevationGrid";
 import {
   fieldSurface,
@@ -39,6 +40,8 @@ import {
 } from "../../src/geo/lambert93";
 import type { LngLatBounds } from "../../src/ign/lidarMetadata";
 
+import { track } from "./activity";
+import { MAP } from "./brand";
 import {
   fieldsGeoJson,
   fieldsShapefileZip,
@@ -51,6 +54,7 @@ import { describeMcpError, type LiveProxy } from "./live";
 import { OutlineEditor, type EditorKind } from "./outlineEditor";
 import { drawProfileChart, formatDistance } from "./profileChart";
 import { openFieldStore, type FieldStore, type SavedField } from "./store";
+import { installSurface } from "./surface";
 
 /*
  * The field workbench: define a field (pick an RPG parcel, draw, import,
@@ -65,11 +69,12 @@ const collection = (
   features: GeoJSON.Feature[] = [],
 ): GeoJSON.FeatureCollection => ({ type: "FeatureCollection", features });
 
-type OverlayKey = "current" | "fall" | "profile" | "edit" | "cursor";
+type OverlayKey = "current" | "target" | "fall" | "profile" | "edit" | "cursor";
 
 /** Overlay data lives here so a style rebuild (source switch) keeps it. */
 const overlays: Record<OverlayKey, GeoJSON.FeatureCollection> = {
   current: collection(),
+  target: collection(),
   fall: collection(),
   profile: collection(),
   edit: collection(),
@@ -100,13 +105,21 @@ export const overlayLayers = (): LayerSpecification[] => [
     id: "ov-current-fill",
     type: "fill",
     source: "ov-current",
-    paint: { "fill-color": "#ffcf3f", "fill-opacity": 0.12 },
+    paint: { "fill-color": MAP.signal, "fill-opacity": 0.07 },
   },
   {
     id: "ov-current-line",
     type: "line",
     source: "ov-current",
-    paint: { "line-color": "#ffcf3f", "line-width": 3 },
+    paint: { "line-color": MAP.signal, "line-width": 2 },
+  },
+  {
+    // Corner brackets around the selected field: the GAïa target lock.
+    id: "ov-target",
+    type: "line",
+    source: "ov-target",
+    layout: { "line-cap": "square", "line-join": "miter" },
+    paint: { "line-color": MAP.signal, "line-width": 2.5 },
   },
   {
     id: "ov-fall-casing",
@@ -114,7 +127,7 @@ export const overlayLayers = (): LayerSpecification[] => [
     source: "ov-fall",
     filter: isLine,
     layout: { "line-cap": "round" },
-    paint: { "line-color": "#1d2421", "line-width": 7, "line-opacity": 0.5 },
+    paint: { "line-color": MAP.casing, "line-width": 7, "line-opacity": 0.55 },
   },
   {
     id: "ov-fall-line",
@@ -122,43 +135,43 @@ export const overlayLayers = (): LayerSpecification[] => [
     source: "ov-fall",
     filter: isLine,
     layout: { "line-cap": "round" },
-    paint: { "line-color": "#ffffff", "line-width": 3.5 },
+    paint: { "line-color": MAP.bone, "line-width": 3.2 },
   },
   {
     id: "ov-fall-head",
     type: "fill",
     source: "ov-fall",
     filter: isPolygon,
-    paint: { "fill-color": "#ffffff" },
+    paint: { "fill-color": MAP.bone },
   },
   {
     id: "ov-profile-casing",
     type: "line",
     source: "ov-profile",
     layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": "#0b2a38", "line-width": 7, "line-opacity": 0.55 },
+    paint: { "line-color": MAP.casing, "line-width": 7, "line-opacity": 0.6 },
   },
   {
     id: "ov-profile-line",
     type: "line",
     source: "ov-profile",
     layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": "#7cd3ff", "line-width": 3.5 },
+    paint: { "line-color": MAP.phosphor, "line-width": 3 },
   },
   {
     id: "ov-edit-fill",
     type: "fill",
     source: "ov-edit",
     filter: isPolygon,
-    paint: { "fill-color": "#ffcf3f", "fill-opacity": 0.18 },
+    paint: { "fill-color": MAP.cobalt, "fill-opacity": 0.16 },
   },
   {
     id: "ov-edit-line",
     type: "line",
     source: "ov-edit",
     paint: {
-      "line-color": "#ffcf3f",
-      "line-width": 2.5,
+      "line-color": MAP.cobaltLight,
+      "line-width": 2,
       "line-dasharray": [2, 1.2],
     },
   },
@@ -167,9 +180,9 @@ export const overlayLayers = (): LayerSpecification[] => [
     type: "circle",
     source: "ov-cursor",
     paint: {
-      "circle-radius": 6,
-      "circle-color": "#7cd3ff",
-      "circle-stroke-color": "#0b2a38",
+      "circle-radius": 5.5,
+      "circle-color": MAP.phosphor,
+      "circle-stroke-color": MAP.casing,
       "circle-stroke-width": 2,
     },
   },
@@ -178,7 +191,6 @@ export const overlayLayers = (): LayerSpecification[] => [
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 const int = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 });
-const m3 = (v: number) => int.format(v);
 
 const polygonOf = (ring: Ring): GeoJSON.Polygon => ({
   type: "Polygon",
@@ -250,6 +262,46 @@ const fallArrow = (
       },
     },
   ];
+};
+
+/** Corner brackets just outside the outline's Lambert-93 bounding box. */
+const targetBrackets = (
+  ring: Ring,
+): { features: GeoJSON.Feature[]; corner: LngLat } => {
+  let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const q of ring.map(lngLatToLambert93)) {
+    [x0, x1] = [Math.min(x0, q.x), Math.max(x1, q.x)];
+    [y0, y1] = [Math.min(y0, q.y), Math.max(y1, q.y)];
+  }
+  const pad = Math.max(x1 - x0, y1 - y0) * 0.05 + 3;
+  [x0, y0, x1, y1] = [x0 - pad, y0 - pad, x1 + pad, y1 + pad];
+  const l = Math.min(x1 - x0, y1 - y0) * 0.18;
+  const ll = (x: number, y: number): GeoJSON.Position => {
+    const q = lambert93ToLngLat({ x, y });
+    return [q.lng, q.lat];
+  };
+  const corner = (
+    cx: number,
+    cy: number,
+    dx: number,
+    dy: number,
+  ): GeoJSON.Feature => ({
+    type: "Feature",
+    properties: {},
+    geometry: {
+      type: "LineString",
+      coordinates: [ll(cx + dx * l, cy), ll(cx, cy), ll(cx, cy + dy * l)],
+    },
+  });
+  return {
+    features: [
+      corner(x0, y1, 1, -1),
+      corner(x1, y1, -1, -1),
+      corner(x1, y0, -1, 1),
+      corner(x0, y0, 1, 1),
+    ],
+    corner: lambert93ToLngLat({ x: x0, y: y1 }),
+  };
 };
 
 /**
@@ -379,7 +431,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
       [w, e] = [Math.min(w, p.lng), Math.max(e, p.lng)];
       [s, n] = [Math.min(s, p.lat), Math.max(n, p.lat)];
     }
-    const phone = window.innerWidth <= 640;
+    const phone = window.innerWidth <= 700;
     map.fitBounds(
       [
         [w, s],
@@ -388,12 +440,12 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
       {
         padding: phone
           ? {
-              top: 70,
-              bottom: window.innerHeight * 0.5 + 20,
-              left: 30,
-              right: 60,
+              top: 60,
+              bottom: window.innerHeight * 0.48 + 24,
+              left: 28,
+              right: 56,
             }
-          : { top: 70, bottom: 90, left: 360, right: 70 },
+          : { top: 64, bottom: 64, left: 64, right: 64 },
         maxZoom: 17.5,
         duration: 900,
       },
@@ -452,6 +504,50 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     }
   };
 
+  const surface = installSurface({
+    map,
+    setStatus: ctx.setStatus,
+    offerFile: (filename, data) => offerFile(filename, data),
+    fieldStem: () => fileStem(current?.name ?? "field"),
+  });
+
+  /** The selected field's tag at its top-left bracket. */
+  let tag: maplibregl.Marker | null = null;
+  const drawTarget = (f: CurrentField | null) => {
+    if (!f) {
+      setOverlay("target", []);
+      tag?.remove();
+      tag = null;
+      return;
+    }
+    const { features, corner } = targetBrackets(f.ring);
+    setOverlay("target", features);
+    const ha = polygonsAreaM2(polygonsOf(f.geometry)) / 1e4;
+    if (!tag) {
+      const el = document.createElement("div");
+      el.className = "gx-tag";
+      tag = new maplibregl.Marker({ element: el, anchor: "bottom-left" });
+    }
+    tag.getElement().textContent = `Target · ${ha.toFixed(2)} ha`;
+    tag.setLngLat([corner.lng, corner.lat]).addTo(map);
+  };
+
+  /** The field's cells on a pack grid: the 1 m LiDAR square, or the 20 m context. */
+  const packWindow = (f: CurrentField): { w: FieldWindow | null; note: string } => {
+    const polys = polygonsOf(f.geometry);
+    const want = polygonsAreaM2(polys);
+    const fine = fieldWindow(ctx.grids.fine, polys);
+    if (fine && fine.validCount * fine.cellArea >= 0.97 * want)
+      return { w: fine, note: "" };
+    const coarse = fieldWindow(ctx.grids.context, polys);
+    if (coarse && coarse.validCount >= 12)
+      return {
+        w: coarse,
+        note: "Designed on the pack's 20 m context grid: volumes are rough here. Live IGN designs this field at up to 0.5 m.",
+      };
+    return { w: null, note: "" };
+  };
+
   // ── Saved fields (filled in once the store answers) ──
   let store: FieldStore | null = null;
   let saved: SavedField[] = [];
@@ -468,6 +564,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     crop: f.crop,
     slopePct: f.stats?.plane ? f.stats.slopePct : null,
     fallDeg: f.stats?.plane ? f.stats.fallDeg : null,
+    design: surface.summary(),
   });
 
   const renderCard = () => {
@@ -513,19 +610,6 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
           ],
         );
       }
-      const areaM2 = ha * 1e4;
-      const avg = (w: { cutM3: number; fillM3: number }) =>
-        areaM2 > 0 ? ((w.cutM3 + w.fillM3) / areaM2) * 100 : 0;
-      if (s.toPlane)
-        rows.push([
-          "Keep its fall",
-          `cut ${m3(s.toPlane.cutM3)} · fill ${m3(s.toPlane.fillM3)} m³ (±${avg(s.toPlane).toFixed(0)} cm)`,
-        ]);
-      if (s.toLevel)
-        rows.push([
-          "Dead level",
-          `cut ${m3(s.toLevel.cutM3)} · fill ${m3(s.toLevel.fillM3)} m³ (±${avg(s.toLevel).toFixed(0)} cm)`,
-        ]);
     }
     ui.stats.replaceChildren(
       ...rows.flatMap(([k, v]) => {
@@ -602,6 +686,8 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
       Object.assign(f, measurePack(f));
       renderCard();
       drawFall();
+      const { w, note } = packWindow(f);
+      surface.setField(w, note);
       return;
     }
     const live = ctx.live();
@@ -610,8 +696,23 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     f.note = "Measuring on IGN LiDAR HD…";
     renderCard();
     drawFall();
-    live
-      .field(f.geometry.coordinates)
+    surface.loading("Loading the field's LiDAR grid for the design…");
+    track(live.fieldGrid(f.geometry.coordinates))
+      .then((grid) => {
+        if (seq !== measureSeq || current !== f) return;
+        const w = fieldWindow(grid, polygonsOf(f.geometry));
+        surface.setField(
+          w,
+          w
+            ? `${grid.source}, ${grid.cellSize} m design grid`
+            : "No LiDAR heights for this field.",
+        );
+      })
+      .catch((err) => {
+        if (seq === measureSeq && current === f)
+          surface.loading(describeMcpError(err));
+      });
+    track(live.field(f.geometry.coordinates))
       .then((s) => {
         if (seq !== measureSeq || current !== f) return;
         if (s?.areaHa === undefined) {
@@ -639,6 +740,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
       { type: "Feature", properties: {}, geometry: field.geometry },
     ]);
     setOverlay("fall", []);
+    drawTarget(current);
     if (fit) fitTo(field.ring);
     measure();
     renderMine();
@@ -649,6 +751,8 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     measureSeq++;
     setOverlay("current", []);
     setOverlay("fall", []);
+    drawTarget(null);
+    surface.setField(null);
     renderCard();
     renderMine();
   };
@@ -954,7 +1058,9 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
         if (!live) throw new Error("Live IGN is off");
         if (length > 10_000)
           throw new Error("Profiles are limited to 10 km in Live IGN.");
-        const r = await live.profile(points.map((p) => [p.lng, p.lat]));
+        const r = await track(
+          live.profile(points.map((p) => [p.lng, p.lat])),
+        );
         samples = sampleProfile(points, r.step, () => NaN);
         const n = Math.min(samples.length, r.h.length);
         samples = samples.slice(0, n).map((s, i) => ({
@@ -1203,6 +1309,8 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
 
   return {
     selectRpg,
+    /** Cut or fill under the cursor when a design is on, for the readout. */
+    describeAt: (p: LngLat) => surface.describeAt(p),
     isEditing: () => editor !== null,
     /** The data source changed: drop what was measured on the old one. */
     onSourceChange: () => {

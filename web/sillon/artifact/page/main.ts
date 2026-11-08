@@ -52,13 +52,17 @@ import {
   type PackTileLayer,
 } from "../pack";
 
+import { onActivity, track } from "./activity";
+import { MAP } from "./brand";
 import { installWorkbench, overlayLayers, overlaySources } from "./fields";
+import { installFullscreen } from "./fullscreen";
 import {
   decodeDemPng,
   describeMcpError,
   LiveProxy,
   type McpLike,
 } from "./live";
+import { cutFillPng, surfaceLayers, surfaceSources } from "./surface";
 
 /*
  * Sillon, artifact edition. Two data sources:
@@ -78,6 +82,11 @@ const $ = <T extends HTMLElement>(id: string) => {
 const ui = {
   panel: $("panel"),
   collapse: $<HTMLButtonElement>("collapse"),
+  fsBtn: $<HTMLButtonElement>("fs-btn"),
+  fsExit: $<HTMLButtonElement>("fs-exit"),
+  linkStatus: $("link-status"),
+  linkText: $("link-text"),
+  boot: $("boot"),
   status: $("status"),
   packName: $("pack-name"),
   srcPack: $<HTMLButtonElement>("src-pack"),
@@ -291,7 +300,7 @@ const liveBytes = (key: string) => {
   let p = liveCache.get(key);
   if (!p) {
     if (!live) return Promise.reject(new Error("live data is off"));
-    p = live.bytes(key);
+    p = track(live.bytes(key));
     p.catch(() => liveCache.delete(key));
     liveCache.set(key, p);
     if (liveCache.size > 900)
@@ -392,6 +401,12 @@ const installProtocol = (pack: PackManifest, grids: Promise<Grids>) => {
             );
           }),
         };
+      case "cutfill": {
+        // The design's cut/fill map, rendered by surface.ts.
+        const png = cutFillPng(z);
+        if (!png) throw new Error("cut/fill image expired");
+        return { data: png.slice(0) };
+      }
       case "live-ortho":
       case "live-irc":
       case "live-shade":
@@ -529,16 +544,34 @@ const buildStyle = (
       shade: raster("shade", zooms.shade),
       hillshade: raster("hillshade", zooms.relief),
       fields: { type: "geojson", data: fields },
+      ...surfaceSources(),
       ...overlaySources(),
     },
     layers: [
       {
         id: "ground",
         type: "background",
-        paint: { "background-color": cssVar("--ground") || "#101413" },
+        paint: { "background-color": cssVar("--night") || MAP.ground },
       },
-      { id: "ortho", type: "raster", source: "ortho" },
-      { id: "irc", type: "raster", source: "irc", layout: hidden },
+      // Imagery recedes (desaturated, dimmed) so the LiDAR and the
+      // instrument's own marks carry the colour.
+      {
+        id: "ortho",
+        type: "raster",
+        source: "ortho",
+        paint: {
+          "raster-saturation": -0.5,
+          "raster-brightness-max": 0.8,
+          "raster-contrast": 0.05,
+        },
+      },
+      {
+        id: "irc",
+        type: "raster",
+        source: "irc",
+        layout: hidden,
+        paint: { "raster-saturation": -0.1, "raster-brightness-max": 0.86 },
+      },
       {
         id: "relief",
         type: "color-relief",
@@ -564,9 +597,9 @@ const buildStyle = (
         type: "line",
         source: "fields",
         paint: {
-          "line-color": "#f6ecc4",
-          "line-width": 1.2,
-          "line-opacity": 0.85,
+          "line-color": MAP.bone,
+          "line-width": 1,
+          "line-opacity": 0.6,
         },
       },
     ],
@@ -579,14 +612,14 @@ const buildStyle = (
       type: "line",
       source: "pack",
       paint: {
-        "line-color": "#ffffff",
+        "line-color": MAP.cobaltLight,
         "line-width": 1.4,
         "line-dasharray": [3, 2],
-        "line-opacity": 0.75,
+        "line-opacity": 0.85,
       },
     });
   }
-  style.layers.push(...overlayLayers());
+  style.layers.push(...surfaceLayers(), ...overlayLayers());
   return style;
 };
 
@@ -648,12 +681,47 @@ const getMcp = async (): Promise<McpLike | null> => {
   }
 };
 
+const READOUT_IDLE = "Move over the map to read heights";
+
+/** Remembers which panel sections the viewer closed (this browser only). */
+const rememberSections = () => {
+  const key = "sillon.sections";
+  let closed: string[] = [];
+  try {
+    closed = JSON.parse(localStorage.getItem(key) ?? "[]") as string[];
+  } catch {
+    closed = [];
+  }
+  for (const d of document.querySelectorAll<HTMLDetailsElement>("details.gx-sec")) {
+    if (closed.includes(d.id)) d.open = false;
+    d.addEventListener("toggle", () => {
+      closed = closed.filter((id) => id !== d.id);
+      if (!d.open) closed.push(d.id);
+      try {
+        localStorage.setItem(key, JSON.stringify(closed));
+      } catch {
+        // Storage refused (private window, preview): nothing to keep.
+      }
+    });
+  }
+};
+
+/** The boot frame turns into the error report when the pack cannot load. */
+const bootFailed = (why: string) => {
+  ui.boot.dataset.kind = "error";
+  const title = ui.boot.querySelector(".gx-boot-title");
+  const text = ui.boot.querySelector(".gx-boot-text");
+  if (title) title.textContent = "Signal severed";
+  if (text) text.textContent = why;
+};
+
 const start = async () => {
   ui.ramp.style.background = reliefGradientCss();
   ui.collapse.addEventListener("click", () => {
-    const collapsed = ui.panel.classList.toggle("collapsed");
-    ui.collapse.setAttribute("aria-expanded", String(!collapsed));
+    const off = document.body.classList.toggle("panel-off");
+    ui.collapse.setAttribute("aria-expanded", String(!off));
   });
+  rememberSections();
 
   let pack: PackManifest;
   let packFields: GeoJSON.FeatureCollection;
@@ -663,10 +731,9 @@ const start = async () => {
       await fetch(pack.rpg)
     ).json()) as GeoJSON.FeatureCollection;
   } catch (e) {
-    setStatus(
-      `The field pack did not load: ${e instanceof Error ? e.message : e}`,
-      "error",
-    );
+    const why = `The field pack did not load: ${e instanceof Error ? e.message : e}`;
+    setStatus(why, "error");
+    bootFailed(why);
     return;
   }
   packFields.features.forEach((f, i) => {
@@ -707,7 +774,10 @@ const start = async () => {
     new maplibregl.NavigationControl({ visualizePitch: true }),
     "top-right",
   );
-  map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "top-right");
+  map.addControl(
+    new maplibregl.ScaleControl({ unit: "metric" }),
+    "bottom-left",
+  );
   map.addControl(
     new maplibregl.AttributionControl({
       compact: true,
@@ -721,10 +791,9 @@ const start = async () => {
   try {
     grids = await gridsPromise;
   } catch (e) {
-    setStatus(
-      `The LiDAR grid did not load: ${e instanceof Error ? e.message : e}`,
-      "error",
-    );
+    const why = `The LiDAR grid did not load: ${e instanceof Error ? e.message : e}`;
+    setStatus(why, "error");
+    bootFailed(why);
     return;
   }
   await new Promise<void>((resolve) =>
@@ -733,6 +802,35 @@ const start = async () => {
   setStatus("");
   applyLayers(map);
   ui.packInfo.textContent = packInfo;
+  ui.boot.classList.add("done");
+  window.setTimeout(() => (ui.boot.hidden = true), 700);
+  installFullscreen([ui.fsBtn, ui.fsExit], () => {
+    // The map's own observer catches most box changes; nudge it once more.
+    window.setTimeout(() => map.resize(), 60);
+  });
+  let linkBroken = false;
+  const renderLink = (busy: number) => {
+    const isLive = state.source === "live";
+    ui.linkStatus.dataset.state = linkBroken
+      ? "error"
+      : isLive
+        ? busy > 0
+          ? "busy"
+          : "live"
+        : "pack";
+    ui.linkText.textContent = linkBroken
+      ? "Signal severed"
+      : isLive
+        ? busy > 0
+          ? `Live link · ${busy} in flight`
+          : "Live link · IGN"
+        : "Offline pack · Camargue";
+  };
+  let busyNow = 0;
+  onActivity((n) => {
+    busyNow = n;
+    renderLink(n);
+  });
   // A handle for debugging and automated checks, as in the Navara app.
   Object.assign(window, { sillon: { map, liveHeights } });
 
@@ -857,9 +955,12 @@ const start = async () => {
     if (source === "live" && (!live || live.failure)) {
       live = new LiveProxy(mcp as McpLike);
       liveCache.clear();
+      linkBroken = false;
       live.onFailure = (e) => {
         ui.liveStatus.textContent = describeMcpError(e);
         setStatus(describeMcpError(e), "error");
+        linkBroken = true;
+        renderLink(busyNow);
       };
     }
     state.source = source;
@@ -868,7 +969,10 @@ const start = async () => {
     ui.srcPack.setAttribute("aria-pressed", String(source === "pack"));
     ui.srcLive.setAttribute("aria-pressed", String(source === "live"));
     ui.packName.textContent =
-      source === "live" ? "Live IGN · LiDAR HD" : `${pack.name} · LiDAR HD`;
+      source === "live"
+        ? "Land instrument · Live IGN · France"
+        : `Land instrument · ${pack.name} · LiDAR HD`;
+    renderLink(busyNow);
     ui.packInfo.textContent = source === "live" ? liveInfo : packInfo;
     ui.goto.placeholder =
       source === "live"
@@ -1018,17 +1122,27 @@ const start = async () => {
   const readout = (lng: number, lat: number) => {
     const p = lngLatToLambert93({ lng, lat });
     const s = heightAt({ lng, lat });
-    ui.readout.hidden = false;
-    ui.readout.textContent =
-      `${s && !Number.isNaN(s.h) ? `${formatHeight(s.h)} (${s.source})` : "loading heights…"} · ` +
-      `${formatLngLat(lng, lat)} · L93 ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+    const design = workbench.describeAt({ lng, lat });
+    ui.readout.textContent = [
+      design,
+      s && !Number.isNaN(s.h)
+        ? `${formatHeight(s.h)} ${s.source}`
+        : "loading heights…",
+      formatLngLat(lng, lat),
+      `L93 ${p.x.toFixed(1)} ${p.y.toFixed(1)}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   };
   map.on("mousemove", (e: MapMouseEvent) =>
     readout(e.lngLat.lng, e.lngLat.lat),
   );
   map
     .getCanvas()
-    .addEventListener("mouseleave", () => (ui.readout.hidden = true));
+    .addEventListener(
+      "mouseleave",
+      () => (ui.readout.textContent = READOUT_IDLE),
+    );
 
   // ── RPG fields ──
   map.on("click", "fields-hit", (e) => {

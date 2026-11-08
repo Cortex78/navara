@@ -20,6 +20,15 @@ export type ExportField = {
   crop?: string | null;
   slopePct?: number | null;
   fallDeg?: number | null;
+  /** The surface design, when one is on (see surface.ts summary). */
+  design?: {
+    design: string;
+    designSlopePct: number;
+    designToward: string | null;
+    cutM3: number;
+    fillM3: number;
+    ratioTarget: number;
+  } | null;
 };
 
 const round = (v: number, digits: number) =>
@@ -46,6 +55,16 @@ export const fieldsGeoJson = (fields: ExportField[]) =>
           crop: f.crop ?? null,
           slope_pct: f.slopePct == null ? null : round(f.slopePct, 3),
           falls_to: f.fallDeg == null ? null : compassPoint(f.fallDeg),
+          ...(f.design
+            ? {
+                design: f.design.design,
+                design_slope_pct: f.design.designSlopePct,
+                design_falls_to: f.design.designToward,
+                cut_m3: f.design.cutM3,
+                fill_m3: f.design.fillM3,
+                cut_fill_target: f.design.ratioTarget,
+              }
+            : {}),
           source: "Sillon · IGN LiDAR HD",
         },
         geometry: {
@@ -102,6 +121,11 @@ const DBF_FIELDS = [
   { name: "CROP", type: "C" as const, length: 60 },
   { name: "SLOPE_PCT", type: "N" as const, length: 8, decimals: 3 },
   { name: "FALLS_TO", type: "C" as const, length: 3 },
+  { name: "DESIGN", type: "C" as const, length: 14 },
+  { name: "D_SLOPE", type: "N" as const, length: 8, decimals: 3 },
+  { name: "D_TOWARD", type: "C" as const, length: 3 },
+  { name: "CUT_M3", type: "N" as const, length: 12, decimals: 0 },
+  { name: "FILL_M3", type: "N" as const, length: 12, decimals: 0 },
 ];
 
 /**
@@ -119,6 +143,11 @@ export const fieldsShapefileZip = (fields: ExportField[], stem: string) => {
         f.crop ?? null,
         f.slopePct ?? null,
         f.fallDeg == null ? null : compassPoint(f.fallDeg),
+        f.design?.design ?? null,
+        f.design?.designSlopePct ?? null,
+        f.design?.designToward ?? null,
+        f.design?.cutM3 ?? null,
+        f.design?.fillM3 ?? null,
       ],
     })),
   );
