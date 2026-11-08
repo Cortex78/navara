@@ -1,0 +1,33 @@
+{
+  "name": "@navaramap/sillon",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sillon — field leveling and drainage design on IGN LiDAR HD, built on Navara (POC)",
+  "scripts": {
+    "dev": "vite",
+    "type-check": "tsc",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest --watch=false",
+    "test:live": "SILLON_LIVE=1 vitest --watch=false src/live.test.ts",
+    "lint": "eslint . --fix",
+    "lint:check": "eslint .",
+    "format": "prettier --write --ignore-path ../../.gitignore --ignore-path ../../.prettierignore .",
+    "format:check": "prettier --check --ignore-path ../../.gitignore --ignore-path ../../.prettierignore ."
+  },
+  "license": "MIT OR Apache-2.0",
+  "dependencies": {
+    "@navaramap/engine": "workspace:*",
+    "@navaramap/engine-api": "workspace:*",
+    "@navaramap/engine-worker": "workspace:*",
+    "@navaramap/three": "workspace:*",
+    "@navaramap/three-default-descs": "workspace:*",
+    "@navaramap/three-default-plugin": "workspace:*",
+    "postprocessing": "6.39.5",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "0.186.0"
+  }
+}
