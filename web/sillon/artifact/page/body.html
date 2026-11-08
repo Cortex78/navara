@@ -24,6 +24,18 @@
 
     <section aria-labelledby="h-map">
       <h2 id="h-map">Map</h2>
+      <div class="field" role="group" aria-label="Data">
+        <span>Data</span>
+        <div class="seg">
+          <button type="button" id="src-pack" class="on" aria-pressed="true">
+            Camargue pack
+          </button>
+          <button type="button" id="src-live" aria-pressed="false" disabled>
+            Live IGN · France
+          </button>
+        </div>
+      </div>
+      <p class="hint" id="live-status">Checking for your Supabase connector…</p>
       <form class="row" id="goto-form">
         <label class="sr" for="goto">Go to</label>
         <input

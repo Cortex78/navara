@@ -68,3 +68,27 @@ pnpm exec tsx artifact/build.ts <outDir>
 ```
 
 Then publish `<outDir>/index.html` with the other files in `<outDir>` beside it.
+
+### Live IGN through Supabase
+
+An artifact page cannot reach another site, but it can call the viewer's
+claude.ai connectors. In live mode the page runs `execute_sql` through the
+Supabase connector against the `sillon-tiles` project:
+
+```
+page ──connector: execute_sql──▶ sillon.proxy(keys) ──cache hit──▶ answer
+                                        └─miss──▶ ign-proxy Edge Function ──▶ IGN Géoplateforme
+```
+
+- `supabase/keys.ts`: the key format (`kind=ortho&z=17&x=…&y=…`), shared by the
+  page, Postgres and the Edge Function.
+- `supabase/schema.sql`: the `sillon` schema, tile cache, `sillon.proxy()` and
+  `sillon.field()`.
+- `supabase/proxy.ts`, `supabase/functions/ign-proxy/`: the Edge Function. It
+  serves imagery tiles, Terrarium elevation tiles (about 60 kB instead of 350 kB
+  of float32), geocoding, LiDAR HD metadata and RPG fields, and measures a field
+  on the native 0.5 m LiDAR HD grid. Bundle it with
+  `pnpm exec tsx supabase/build-edge.ts <out.js>` and deploy the output as
+  `index.ts`.
+
+Viewers without the connector keep the Camargue pack.

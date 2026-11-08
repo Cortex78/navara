@@ -113,17 +113,25 @@ describe("fetchDemTileHeights", () => {
     ]);
   });
 
-  it("does not fall back on client errors", async () => {
-    const xml = new Response(
-      "<ServiceExceptionReport><ServiceException>bad</ServiceException></ServiceExceptionReport>",
-      { status: 400, headers: { "content-type": "text/xml" } },
-    );
+  it("falls back on OGC exceptions, and fails if the fallback does too", async () => {
+    const layers: (string | null)[] = [];
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      layers.push(new URL(String(input)).searchParams.get("LAYERS"));
+      return new Response(
+        "<ServiceExceptionReport><ServiceException>Layer unknown</ServiceException></ServiceExceptionReport>",
+        { status: 400, headers: { "content-type": "text/xml" } },
+      );
+    });
     await expect(
       fetchDemTileHeights(
         { product: "mnt", tileSize: 256, z: 17, x: 67193, y: 47869 },
-        { fetchImpl: async () => xml },
+        { fetchImpl },
       ),
-    ).rejects.toThrow("bad");
+    ).rejects.toThrow("Layer unknown");
+    expect(layers).toEqual([
+      "IGNF_LIDAR-HD_MNT_ELEVATION.MIXED.WGS84G",
+      FALLBACK_LAYER,
+    ]);
   });
 });
 

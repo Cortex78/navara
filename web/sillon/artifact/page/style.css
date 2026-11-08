@@ -267,6 +267,11 @@ input[type="range"] {
   font-weight: 600;
 }
 
+.seg button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 button.primary {
   background: var(--straw);
   border-color: var(--straw);

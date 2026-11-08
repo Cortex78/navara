@@ -79,9 +79,9 @@ const tileOutsideCoverage = ({ z, x, y }: TileXYZ) => {
 export const DEM_MIN_ZOOM = 8;
 
 /**
- * Served for a tile when its product's request fails with a 5xx or times
- * out. The Géoplateforme answers large LiDAR HD mosaics with 504 when its
- * cache is cold; RGE ALTI® comes from a lighter pyramid.
+ * Served for a tile when its product's request fails or times out. Under
+ * load the Géoplateforme answers LiDAR HD mosaics with 504s or a transient
+ * "layer unknown" exception; RGE ALTI® comes from a lighter pyramid.
  */
 export const FALLBACK_LAYER = ELEVATION_LAYERS.rgeAlti;
 
@@ -103,7 +103,7 @@ const fetchLayerHeights = async (
 };
 
 const isServiceFailure = (e: unknown) =>
-  (e instanceof GeoplateformeError && e.status >= 500) ||
+  e instanceof GeoplateformeError ||
   (e instanceof DOMException && e.name === "TimeoutError");
 
 export type DemTileHeights = {
