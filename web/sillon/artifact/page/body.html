@@ -103,27 +103,54 @@
 
     <section aria-labelledby="h-field">
       <h2 id="h-field">Field</h2>
+      <div class="tools" role="group" aria-label="Field tools">
+        <button type="button" id="draw-field" aria-pressed="false">
+          Draw a field
+        </button>
+        <button type="button" id="draw-profile" aria-pressed="false">
+          Profile
+        </button>
+        <button type="button" id="import-btn">Import…</button>
+      </div>
+      <input
+        type="file"
+        id="import-file"
+        accept=".geojson,.json,.kml,.kmz,.zip,.shp"
+        hidden
+      />
+      <p class="hint" id="field-hint">
+        Click a farm field (RPG), draw your own, or import a GeoJSON, KML or
+        zipped shapefile. Sillon reads its area, natural fall and levelling
+        volumes from the LiDAR grid.
+      </p>
       <div id="field-card" class="card" hidden>
+        <label class="sr" for="field-name">Field name</label>
+        <input id="field-name" class="name" type="text" maxlength="80" />
         <p class="crop" id="field-crop"></p>
-        <dl class="stats">
-          <dt>Area</dt>
-          <dd id="field-area"></dd>
-          <dt>Elevation</dt>
-          <dd id="field-range"></dd>
-          <dt>Relief</dt>
-          <dd id="field-relief"></dd>
-          <dt>Mean</dt>
-          <dd id="field-mean"></dd>
-        </dl>
-        <div class="row">
-          <button type="button" id="field-fit">Colour to this field</button>
+        <dl class="stats" id="field-stats"></dl>
+        <p class="hint" id="field-note"></p>
+        <div class="btns">
+          <button type="button" id="field-fall">Profile down the fall</button>
+          <button type="button" id="field-fit">Colour to field</button>
+          <button type="button" id="field-edit">Edit outline</button>
+          <button type="button" id="field-save" hidden>
+            Save to My fields
+          </button>
+          <button type="button" id="field-shp">Shapefile + KML</button>
+          <button type="button" id="field-geojson">GeoJSON</button>
           <button type="button" id="field-clear">Clear</button>
         </div>
       </div>
-      <p class="hint" id="field-hint">
-        Click a field outline on the map to read its area and relief from the 1
-        m LiDAR grid.
-      </p>
+    </section>
+
+    <section aria-labelledby="h-mine" id="mine" hidden>
+      <h2 id="h-mine">My fields</h2>
+      <ul class="mine" id="mine-list"></ul>
+      <p class="hint" id="mine-status"></p>
+      <div class="row">
+        <button type="button" id="mine-shp">All as shapefile</button>
+        <button type="button" id="mine-geojson">GeoJSON</button>
+      </div>
     </section>
 
     <section aria-labelledby="h-data">
@@ -136,6 +163,27 @@
     </section>
   </div>
 </aside>
+
+<div class="toolbar" id="toolbar" role="toolbar" aria-label="Drawing" hidden>
+  <span id="toolbar-text"></span>
+  <div class="toolbar-btns">
+    <button type="button" id="tool-undo">Undo</button>
+    <button type="button" id="tool-cancel">Cancel</button>
+    <button type="button" id="tool-done" class="primary">Done</button>
+  </div>
+</div>
+
+<section class="drawer" id="drawer" aria-labelledby="drawer-title" hidden>
+  <header class="drawer-head">
+    <h2 id="drawer-title">Elevation profile</h2>
+    <button type="button" id="drawer-csv">CSV</button>
+    <button type="button" id="drawer-close" aria-label="Close the profile">
+      ×
+    </button>
+  </header>
+  <p class="drawer-stats" id="drawer-stats"></p>
+  <div class="chart-host" id="chart"></div>
+</section>
 
 <div class="readout" id="readout" hidden></div>
 <div class="badge" id="badge"></div>

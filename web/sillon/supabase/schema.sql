@@ -1,7 +1,8 @@
 -- Database side of the Sillon artifact's live mode (Supabase project
--- "sillon-tiles"). The artifact calls `sillon.proxy(keys)` and
--- `sillon.field(coordinates)` through the viewer's Supabase connector
--- (execute_sql); misses go to the ign-proxy Edge Function (functions/ign-proxy).
+-- "sillon-tiles"). The artifact calls `sillon.proxy(keys)`,
+-- `sillon.field(coordinates)` and `sillon.profile(coordinates)` through the
+-- viewer's Supabase connector (execute_sql); misses go to the ign-proxy Edge
+-- Function (functions/ign-proxy).
 --
 -- After applying, set the Edge Function URL and the project's public anon key:
 --   insert into sillon.config (name, value) values
@@ -116,5 +117,11 @@ create or replace function sillon.field(coordinates jsonb) returns jsonb
 language sql
 set search_path = ''
 as $$ select sillon.edge(jsonb_build_object('field', coordinates)) $$;
+
+-- Heights along a line (GeoJSON LineString coordinates), measured by ign-proxy.
+create or replace function sillon.profile(coordinates jsonb) returns jsonb
+language sql
+set search_path = ''
+as $$ select sillon.edge(jsonb_build_object('profile', coordinates)) $$;
 
 revoke all on all functions in schema sillon from public, anon, authenticated;

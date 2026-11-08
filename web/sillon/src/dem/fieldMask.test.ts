@@ -81,6 +81,54 @@ describe("fieldSurface", () => {
     expect(s.nodataShare).toBe(0);
   });
 
+  it("finds the natural fall and the earthwork to level it", () => {
+    const s = fieldSurface(grid, [
+      [
+        ring([
+          [825000, 6277100],
+          [825050, 6277100],
+          [825050, 6277000],
+          [825000, 6277000],
+        ]),
+      ],
+    ]);
+    if (!s) throw new Error("no surface");
+    // 0.1 m per map metre eastward: a 10 % fall toward the west.
+    expect(s.slopePct).toBeGreaterThan(9.98);
+    expect(s.slopePct).toBeLessThan(10.01);
+    expect(s.fallDeg).toBeCloseTo(270, 6);
+    expect(s.rmsM).toBeLessThan(1e-4);
+    expect(s.toPlane.cutM3).toBeLessThan(1);
+    // Dead level at 2.45 m: half the field is cut by 1.25 m on average.
+    expect(s.toLevel.cutM3).toBeGreaterThan(3100);
+    expect(s.toLevel.cutM3).toBeCloseTo(s.toLevel.fillM3, 0);
+  });
+
+  it("keeps a ditch from tilting the plane", () => {
+    const flat: ElevationGrid = {
+      ...grid,
+      data: Float32Array.from({ length: 10000 }, (_, i) =>
+        i % 100 >= 45 && i % 100 < 47 ? 1 : 2,
+      ),
+    };
+    const s = fieldSurface(flat, [
+      [
+        ring([
+          [825000, 6277100],
+          [825050, 6277100],
+          [825050, 6277000],
+          [825000, 6277000],
+        ]),
+      ],
+    ]);
+    if (!s) throw new Error("no surface");
+    expect(s.slopePct).toBeLessThan(0.01);
+    expect(s.plane?.z0).toBeCloseTo(2, 6);
+    // The 2 m wide ditch, 1 m deep and 100 m long, is all fill.
+    expect(s.toPlane.fillM3).toBeGreaterThan(199);
+    expect(s.toPlane.fillM3).toBeLessThan(200.5);
+  });
+
   it("returns null for a polygon off the grid", () => {
     expect(
       fieldSurface(grid, [

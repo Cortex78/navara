@@ -1,3 +1,4 @@
+import type { FieldSurface } from "../../src/dem/fieldMask";
 import { decodeTerrarium } from "../../src/dem/terrarium";
 import { KEY_PATTERN } from "../../supabase/keys";
 
@@ -84,6 +85,27 @@ type Waiter = {
  * `execute_sql` call, a few calls at a time, so a screenful of tiles costs
  * a handful of connector round trips.
  */
+export type LiveFieldStats = FieldSurface & {
+  cellSize: number;
+  source: string;
+};
+
+export type LiveProfile = {
+  step: number;
+  cellSize: number;
+  source: string;
+  d: number[];
+  h: (number | null)[];
+};
+
+/** Coordinates as a JSON literal safe to quote in SQL: numbers and brackets only. */
+const numericJson = (coordinates: unknown) => {
+  const literal = JSON.stringify(coordinates);
+  if (!/^[-\d.,[\]e]+$/.test(literal))
+    throw new Error("coordinates must be numbers");
+  return literal;
+};
+
 export class LiveProxy {
   private waiting = new Map<string, Waiter[]>();
   private queued: string[] = [];
@@ -129,26 +151,24 @@ export class LiveProxy {
     return JSON.parse(new TextDecoder().decode(await this.bytes(key))) as T;
   }
 
-  /** Area and relief of a field polygon from the native LiDAR HD grid. */
-  async field(coordinates: unknown) {
+  /** Area, relief, natural fall and earthwork of a field from the native LiDAR HD grid. */
+  async field(coordinates: unknown): Promise<LiveFieldStats | undefined> {
     if (this.failure) throw this.failure;
-    const literal = JSON.stringify(coordinates);
-    if (!/^[-\d.,[\]e]+$/.test(literal))
-      throw new Error("field coordinates must be numbers");
     const res = await this.call(
-      `select sillon.field('${literal}'::jsonb) as stats`,
+      `select sillon.field('${numericJson(coordinates)}'::jsonb) as stats`,
     );
-    return parseSqlRows(res.payload)[0]?.stats as {
-      areaHa: number;
-      min: number;
-      max: number;
-      mean: number;
-      p1: number;
-      p99: number;
-      nodataShare: number;
-      cellSize: number;
-      source: string;
-    };
+    return parseSqlRows(res.payload)[0]?.stats as LiveFieldStats | undefined;
+  }
+
+  /** Heights along a line every `step` ground metres (see handleProfile). */
+  async profile(coordinates: number[][]): Promise<LiveProfile> {
+    if (this.failure) throw this.failure;
+    const res = await this.call(
+      `select sillon.profile('${numericJson(coordinates)}'::jsonb) as r`,
+    );
+    const r = parseSqlRows(res.payload)[0]?.r as LiveProfile | undefined;
+    if (!r?.d) throw new Error("the profile came back empty");
+    return r;
   }
 
   private call(query: string) {

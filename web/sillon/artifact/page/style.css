@@ -325,10 +325,6 @@ button.link {
   background: var(--ground);
 }
 
-.crop {
-  font-weight: 600;
-}
-
 .stats {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -344,6 +340,288 @@ button.link {
   margin: 0;
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
+}
+
+.tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.tools button,
+.btns button {
+  font-size: 12.5px;
+  padding: 6px 8px;
+  min-height: 34px;
+}
+
+.tools button[aria-pressed="true"] {
+  border-color: var(--straw);
+  color: var(--straw);
+  font-weight: 600;
+}
+
+.btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input.name {
+  font: 600 14px var(--body);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom-color: var(--line);
+  border-radius: 4px;
+  padding: 4px 6px;
+  margin: -4px -6px 0;
+  width: calc(100% + 12px);
+}
+
+input.name:hover,
+input.name:focus {
+  border-color: var(--line);
+  background: var(--panel);
+}
+
+.crop {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.crop[hidden] {
+  display: none;
+}
+
+.mine {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.mine li {
+  display: flex;
+  gap: 4px;
+}
+
+.mine .open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  font-size: 13px;
+  min-height: 32px;
+  padding: 5px 9px;
+}
+
+.mine .open span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mine .area {
+  font: 12px var(--mono);
+  color: var(--muted);
+  flex: none;
+}
+
+.mine li.on .open {
+  border-color: var(--straw);
+}
+
+.mine .del {
+  min-height: 32px;
+  padding: 4px 9px;
+  color: var(--muted);
+}
+
+/* Drawing toolbar, over the top of the map. */
+.toolbar {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  padding: 6px 6px 6px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+  z-index: 4;
+  /* A corner dragged under the bar must still reach the map. */
+  pointer-events: none;
+}
+
+.toolbar button {
+  pointer-events: auto;
+}
+
+.toolbar[hidden] {
+  display: none;
+}
+
+.toolbar-btns {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.toolbar button {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+}
+
+.vertex {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffcf3f;
+  border: 2px solid #1d2421;
+  color: #1d2421;
+  font: 700 11px/18px var(--body);
+  text-align: center;
+  cursor: grab;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+}
+
+.vertex.closer {
+  background: #ffffff;
+  outline: 3px solid #ffcf3f;
+}
+
+.midpoint {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: rgb(29 36 33 / 0.75);
+  border: 1.5px solid #ffcf3f;
+  color: #ffcf3f;
+  font: 700 13px/14px var(--body);
+}
+
+/* Elevation profile drawer, along the bottom of the map. */
+.drawer {
+  position: absolute;
+  left: calc(max(16px, env(safe-area-inset-left, 0px)) + 328px);
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  z-index: 3;
+}
+
+.drawer[hidden] {
+  display: none;
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drawer-head h2 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.drawer-head button {
+  min-height: 30px;
+  padding: 3px 10px;
+  font-size: 12.5px;
+}
+
+.drawer-stats {
+  font: 11.5px/1.5 var(--mono);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-host {
+  height: 150px;
+  font: 11px var(--mono);
+  color: var(--muted);
+}
+
+.chart {
+  display: block;
+  touch-action: none;
+}
+
+.chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.chart .tick {
+  fill: var(--muted);
+  font: 10.5px var(--mono);
+}
+
+.chart .area {
+  fill: var(--water);
+  opacity: 0.16;
+}
+
+.chart .line {
+  fill: none;
+  stroke: var(--water);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.chart .cursor line {
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.chart .cursor circle {
+  fill: var(--water);
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.chart .cursor-label {
+  fill: var(--ink);
+  font: 600 11px var(--mono);
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 3px;
+}
+
+body.profile-open .readout,
+body.profile-open .badge:not(:empty) {
+  bottom: calc(256px + env(safe-area-inset-bottom, 0px));
 }
 
 .hint {
@@ -419,6 +697,35 @@ button.link {
     left: max(12px, env(safe-area-inset-left, 0px));
     right: calc(56px + env(safe-area-inset-right, 0px));
     max-width: none;
+  }
+
+  .toolbar {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: calc(56px + env(safe-area-inset-right, 0px));
+    transform: none;
+    max-width: none;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  body.tool-on .badge,
+  body.tool-on .readout,
+  body.profile-open .badge,
+  body.profile-open .readout {
+    display: none;
+  }
+
+  /* On a phone the panel is the bottom sheet, so the profile sits on top. */
+  .drawer {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    bottom: auto;
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: calc(56px + env(safe-area-inset-right, 0px));
+  }
+
+  .chart-host {
+    height: 120px;
   }
 
   .readout {

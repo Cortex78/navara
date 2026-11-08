@@ -82,8 +82,9 @@ page ──connector: execute_sql──▶ sillon.proxy(keys) ──cache hit─
 
 - `supabase/keys.ts`: the key format (`kind=ortho&z=17&x=…&y=…`), shared by the
   page, Postgres and the Edge Function.
-- `supabase/schema.sql`: the `sillon` schema, tile cache, `sillon.proxy()` and
-  `sillon.field()`.
+- `supabase/schema.sql`: the `sillon` schema, tile cache, `sillon.proxy()`,
+  `sillon.field()` (area, relief, natural fall, levelling volumes) and
+  `sillon.profile()` (heights along a line).
 - `supabase/proxy.ts`, `supabase/functions/ign-proxy/`: the Edge Function. It
   serves imagery tiles, Terrarium elevation tiles (about 60 kB instead of 350 kB
   of float32), geocoding, LiDAR HD metadata and RPG fields, and measures a field
@@ -92,3 +93,15 @@ page ──connector: execute_sql──▶ sillon.proxy(keys) ──cache hit─
   `index.ts`.
 
 Viewers without the connector keep the Camargue pack.
+
+### Field workbench
+
+`artifact/page/fields.ts` turns a field (an RPG parcel, a drawn or imported
+outline, or one from My fields) into a card of area, relief, natural fall and
+land-levelling volumes, and cuts elevation profiles. The engine-free parts live
+in `src/`: `dem/planeFit.ts`, `dem/profile.ts`, `dem/corridor.ts`,
+`field/geometry.ts`, `field/shapefile.ts`, `field/zip.ts`.
+
+The published page declares these capabilities: `mcp` (Supabase
+`execute_sql`), `db` and `user` (My fields, under the viewer's private
+`data/users/<id>/`) and `downloads` (Shapefile, KML, GeoJSON, CSV).

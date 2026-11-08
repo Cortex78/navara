@@ -112,15 +112,37 @@ The IGN data layer and a Navara map shell.
 - Verified: 72 unit tests, 9 live tests against data.geopf.fr and Esri, and a headless Chromium walkthrough (393 DEM tiles, none failed; a 649 ha native grid in about 4 s).
 - App: terrain from LiDAR HD, imagery picker, LiDAR rendering (elevation colour with auto range, hillshade, IGN shade, classes), LiDAR opacity, height stretch, plan/3D, cursor readout (m, lat/lng, L93), acquisition badge, go-to, "Load LiDAR grid for view".
 
-### S2 — App shell and field definition
+### S2 — Field definition ✅ (artifact edition)
 
-- State store (field, surfaces, settings), units (m/ft, ha/ac), FR/EN strings, a mobile bottom sheet, and the left rail from the workstation (Field · Surface · Paths · Water · Irrigate · Job · Export).
-- Field: draw/edit a polygon with numbered vertex handles; **pick an RPG field with one click** (WFS `RPG.LATEST:parcelles_graphiques`, crop code shown); cadastre overlay; import/export GeoJSON/KML.
-- Grid masked to the field (scanline polygon rasterisation); area, elevation range, relief.
-- Elevation profile tool (polyline → sampled profile chart).
-- Overlay tile server in the service worker (`/__sillon/overlay/{id}/...`) with grid → colour LUT.
-- Persistence in IndexedDB; offline re-open of a visited field.
-- Accept: pick a Camargue rice field and get its area within 1 % of the RPG `surf_parc`, plus a profile across it.
+Built for the claude.ai artifact, where Sillon is used today; the Navara app
+picks the same modules up when its shell grows a field panel.
+
+- Field from an RPG parcel (one click, crop and declared area shown), drawn
+  (numbered draggable corners, "+" to insert, double-click to remove,
+  self-intersection refused), imported, or reopened from My fields.
+- Field card: area (ha, ac) and perimeter from the outline; elevation, relief
+  with and without ditches; **natural fall** (least-squares plane refitted
+  without cells > 3 RMS off it, so ditches do not tilt it) as % toward a
+  compass point, with a fall arrow on the map; evenness (RMS about the plane);
+  **land-levelling volumes** to keep its fall and to dead level (rice basins).
+- Elevation profile: free polyline, or one click down the fall line (along the
+  long axis for a level basin); chart with a map-linked cursor, length, fall,
+  grade, steepest 10 m, CSV.
+- Import GeoJSON, KML, zipped shapefile (WGS84 or Lambert-93, as TELEPAC and
+  Mes Parcelles export) or bare .shp; export one field or all saved fields as
+  a WGS84 shapefile zip with a KML inside, or GeoJSON.
+- My fields: saved per viewer in the artifact database (`data/users/<id>`),
+  private to them.
+- Live IGN: `sillon.field()` returns plane, slope and volumes; `sillon.profile()`
+  reads only the 256 m blocks a line crosses on LiDAR HD and fills unflown
+  stretches from RGE ALTI®.
+- Verified: 136 unit tests (a tilted plane's fall to 0.01 %, a ditch kept out
+  of the fit, shapefiles re-read by pyshp, zip CRCs); headless Chromium under
+  the artifact CSP on desktop and phone, pack and live (a Camargue rice basin
+  at 19.83 ha measured vs 19.83 declared; a Beauce maize field falling 0.63 %
+  SE, 3.97 m over the 526 m fall line).
+- Carried to later sprints: cadastre overlay and FR/EN strings (S10), ft/yd³
+  units and the overlay tile server (S3).
 
 ### S3 — Surface design: cut/fill
 

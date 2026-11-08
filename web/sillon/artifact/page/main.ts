@@ -22,7 +22,6 @@ import {
   sampleGrid,
   type ElevationGrid,
 } from "../../src/dem/elevationGrid";
-import { fieldSurface, type LngLatPolygon } from "../../src/dem/fieldMask";
 import { hillshade } from "../../src/dem/hillshade";
 import { encodePngRgb } from "../../src/dem/png";
 import { encodeTerrarium } from "../../src/dem/terrarium";
@@ -53,6 +52,7 @@ import {
   type PackTileLayer,
 } from "../pack";
 
+import { installWorkbench, overlayLayers, overlaySources } from "./fields";
 import {
   decodeDemPng,
   describeMcpError,
@@ -99,15 +99,6 @@ const ui = {
   fit: $<HTMLButtonElement>("fit"),
   rangeMin: $("range-min"),
   rangeMax: $("range-max"),
-  fieldCard: $("field-card"),
-  fieldHint: $("field-hint"),
-  fieldCrop: $("field-crop"),
-  fieldArea: $("field-area"),
-  fieldRange: $("field-range"),
-  fieldRelief: $("field-relief"),
-  fieldMean: $("field-mean"),
-  fieldFit: $<HTMLButtonElement>("field-fit"),
-  fieldClear: $<HTMLButtonElement>("field-clear"),
   analyse: $<HTMLButtonElement>("analyse"),
   gridInfo: $("grid-info"),
   packInfo: $("pack-info"),
@@ -429,13 +420,6 @@ const installProtocol = (pack: PackManifest, grids: Promise<Grids>) => {
 
 type Mode = "relief" | "hillshade" | "ign-shade" | "off";
 type Source = "pack" | "live";
-type FieldProps = {
-  crop: string;
-  code: string;
-  ha: number;
-  organic: boolean;
-  fid: number;
-};
 
 const state = {
   source: "pack" as Source,
@@ -446,7 +430,6 @@ const state = {
   fieldsOn: true,
   range: { min: -0.5, max: 2.5 },
   autoRange: true,
-  field: null as null | { p1: number; p99: number },
 };
 
 const reliefExpression = (
@@ -546,6 +529,7 @@ const buildStyle = (
       shade: raster("shade", zooms.shade),
       hillshade: raster("hillshade", zooms.relief),
       fields: { type: "geojson", data: fields },
+      ...overlaySources(),
     },
     layers: [
       {
@@ -585,13 +569,6 @@ const buildStyle = (
           "line-opacity": 0.85,
         },
       },
-      {
-        id: "field-selected",
-        type: "line",
-        source: "fields",
-        filter: ["==", ["get", "fid"], -1],
-        paint: { "line-color": "#ffcf3f", "line-width": 3.2 },
-      },
     ],
     terrain: { source: "terrain", exaggeration: state.stretch },
   };
@@ -609,6 +586,7 @@ const buildStyle = (
       },
     });
   }
+  style.layers.push(...overlayLayers());
   return style;
 };
 
@@ -620,8 +598,7 @@ const applyLayers = (map: MapLibreMap) => {
   show("relief", state.mode === "relief");
   show("hillshade", state.mode === "hillshade");
   show("ign-shade", state.mode === "ign-shade");
-  for (const id of ["fields-hit", "fields-line", "field-selected"])
-    show(id, state.fieldsOn);
+  for (const id of ["fields-hit", "fields-line"]) show(id, state.fieldsOn);
   map.setPaintProperty("relief", "color-relief-opacity", state.opacity);
   map.setPaintProperty("ign-shade", "raster-opacity", state.opacity);
   map.setPaintProperty("hillshade", "raster-opacity", state.opacity);
@@ -639,15 +616,6 @@ const applyRange = (map: MapLibreMap, min: number, max: number) => {
   );
   ui.rangeMin.textContent = min.toFixed(2);
   ui.rangeMax.textContent = max.toFixed(2);
-};
-
-const polygonsOf = (f: GeoJSON.Feature): LngLatPolygon[] => {
-  const g = f.geometry;
-  const toRings = (poly: GeoJSON.Position[][]) =>
-    poly.map((ring) => ring.map(([lng, lat]) => ({ lng, lat })));
-  if (g.type === "Polygon") return [toRings(g.coordinates)];
-  if (g.type === "MultiPolygon") return g.coordinates.map(toRings);
-  return [];
 };
 
 const acquisitionText = (tiles: LidarTileMetadata[], tileId?: string) => {
@@ -856,12 +824,34 @@ const start = async () => {
   });
   onSettled();
 
+  // ── Field workbench ──
+  const workbench = installWorkbench({
+    map,
+    source: () => state.source,
+    live: () => live,
+    grids,
+    packArea: pack.context,
+    setStatus,
+    colourTo: (lo, hi) => {
+      state.autoRange = false;
+      if (state.mode !== "relief") {
+        ui.mode.value = state.mode = "relief";
+        applyLayers(map);
+      }
+      applyRange(map, lo, hi);
+    },
+    colourAuto: () => {
+      state.autoRange = true;
+      fitView();
+    },
+    useLive: () => {
+      if (!mcp) return false;
+      setSource("live");
+      return true;
+    },
+  });
+
   // ── Data source ──
-  const resetField = () => {
-    state.field = null;
-    ui.fieldCard.hidden = true;
-    ui.fieldHint.hidden = false;
-  };
   const setSource = (source: Source) => {
     if (source === "live" && !mcp) return;
     if (source === "live" && (!live || live.failure)) {
@@ -888,7 +878,6 @@ const start = async () => {
     setStatus(
       source === "live" ? "Loading live IGN tiles through Supabase…" : "",
     );
-    resetField();
     fields = source === "live" ? emptyFields() : packFields;
     liveFieldIds.clear();
     const b = source === "live" ? FRANCE : pack.context;
@@ -914,6 +903,7 @@ const start = async () => {
       applyRange(map, state.range.min, state.range.max);
       onSettled();
     });
+    workbench.onSourceChange();
     if (source === "live") {
       map.once("idle", () => {
         if (!live?.failure) setStatus("");
@@ -1040,88 +1030,21 @@ const start = async () => {
     .getCanvas()
     .addEventListener("mouseleave", () => (ui.readout.hidden = true));
 
-  // ── Fields ──
-  type Surface = {
-    areaHa: number;
-    min: number;
-    max: number;
-    mean: number;
-    p1: number;
-    p99: number;
-  };
-  const renderField = (props: FieldProps, s: Surface | null, note: string) => {
-    ui.fieldHint.hidden = true;
-    ui.fieldCard.hidden = false;
-    ui.fieldCrop.textContent = `${props.crop} (${props.code})${props.organic ? " · organic" : ""}`;
-    if (!s) {
-      ui.fieldArea.textContent = `${props.ha} ha declared`;
-      ui.fieldRange.textContent = note;
-      ui.fieldRelief.textContent = "–";
-      ui.fieldMean.textContent = "–";
-      state.field = null;
-      return;
-    }
-    ui.fieldArea.textContent = `${s.areaHa.toFixed(2)} ha measured · ${props.ha} ha declared`;
-    ui.fieldRange.textContent = `${formatHeight(s.min)} to ${formatHeight(s.max)}`;
-    ui.fieldRelief.textContent = `${formatHeight(s.max - s.min)} (${formatHeight(s.p99 - s.p1)} without ditches) · ${note}`;
-    ui.fieldMean.textContent = formatHeight(s.mean);
-    state.field = { p1: s.p1, p99: s.p99 };
-  };
-
-  let fieldSeq = 0;
-  const showField = (fid: number) => {
-    const f = fields.features[fid];
-    if (!f) return;
-    const props = f.properties as FieldProps;
-    map.setFilter("field-selected", ["==", ["get", "fid"], fid]);
-    if (state.source === "pack") {
-      renderField(
-        props,
-        fieldSurface(grids.fine, polygonsOf(f)),
-        "LiDAR HD 1 m grid",
-      );
-      return;
-    }
-    const seq = ++fieldSeq;
-    renderField(props, null, "measuring on IGN LiDAR HD…");
-    const geometry = f.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon;
-    live
-      ?.field(geometry.coordinates)
-      .then((s) => {
-        if (seq !== fieldSeq) return;
-        if (s?.areaHa === undefined)
-          renderField(props, null, "no LiDAR heights for this field");
-        else renderField(props, s, `${s.source} ${s.cellSize} m grid`);
-      })
-      .catch((err) => {
-        if (seq === fieldSeq) renderField(props, null, describeMcpError(err));
-      });
-  };
+  // ── RPG fields ──
   map.on("click", "fields-hit", (e) => {
     const fid = e.features?.[0]?.properties?.fid;
-    if (typeof fid === "number") showField(fid);
+    const f = typeof fid === "number" ? fields.features[fid] : undefined;
+    // The full outline from the source data, not the tile-clipped one.
+    if (f) workbench.selectRpg(f);
   });
-  map.on("click", (e) => readout(e.lngLat.lng, e.lngLat.lat));
-  map.on(
-    "mouseenter",
-    "fields-hit",
-    () => (map.getCanvas().style.cursor = "pointer"),
-  );
-  map.on("mouseleave", "fields-hit", () => (map.getCanvas().style.cursor = ""));
-  ui.fieldFit.addEventListener("click", () => {
-    if (!state.field) return;
-    state.autoRange = false;
-    if (state.mode !== "relief") {
-      ui.mode.value = state.mode = "relief";
-      applyLayers(map);
-    }
-    applyRange(map, state.field.p1, state.field.p99);
+  map.on("click", (e) => {
+    if (!workbench.isEditing()) readout(e.lngLat.lng, e.lngLat.lat);
   });
-  ui.fieldClear.addEventListener("click", () => {
-    resetField();
-    map.setFilter("field-selected", ["==", ["get", "fid"], -1]);
-    state.autoRange = true;
-    fitView();
+  map.on("mouseenter", "fields-hit", () => {
+    if (!workbench.isEditing()) map.getCanvas().style.cursor = "pointer";
+  });
+  map.on("mouseleave", "fields-hit", () => {
+    if (!workbench.isEditing()) map.getCanvas().style.cursor = "";
   });
 
   // ── Data ──
@@ -1134,7 +1057,7 @@ const start = async () => {
             `${hs.length} height samples across the view (live IGN terrain tiles)`,
             `${formatHeight(Math.min(...hs))} to ${formatHeight(Math.max(...hs))}`,
             `Median ${formatHeight(p50)} · 1–99 % ${formatHeight(p1)} to ${formatHeight(p99)}`,
-            "Click a field for its area and relief on the native 0.5 m grid.",
+            "Click or draw a field for its area, natural fall and levelling volumes on the native 0.5 m grid.",
           ].join("\n")
         : "Heights are still loading. Try again once the map has settled.";
       return;

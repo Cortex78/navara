@@ -1,6 +1,10 @@
+import { loadHeightsAt } from "../src/dem/corridor";
 import { renderDemTile } from "../src/dem/demTileBridge";
 import { lambert93Envelope, loadElevationGrid } from "../src/dem/elevationGrid";
 import { fieldSurface, type LngLatPolygon } from "../src/dem/fieldMask";
+import { profileStep, sampleProfile } from "../src/dem/profile";
+import { ringPerimeterM } from "../src/field/geometry";
+import type { XY } from "../src/geo/lambert93";
 import { searchPlaces } from "../src/ign/geocode";
 import {
   ELEVATION_LAYERS,
@@ -236,7 +240,8 @@ export const handleField = async (coordinates: unknown) => {
   );
   const bbox = lambert93Envelope(polygons.flat(2));
   const area = (bbox.maxX - bbox.minX) * (bbox.maxY - bbox.minY);
-  if (area > 25e6) throw new RangeError("field larger than 25 km²");
+  // At 1 m that is 4 M cells: the grid, mask and heights stay under ~80 MB.
+  if (area > 4e6) throw new RangeError("field bounding box over 4 km²");
   const cellSize = area > NATIVE_FIELD_M2 ? 1 : 0.5;
   const measure = async (layer: string) =>
     fieldSurface(
@@ -250,4 +255,63 @@ export const handleField = async (coordinates: unknown) => {
     source = "RGE ALTI";
   }
   return { ...surface, cellSize, source };
+};
+
+/** Longest profile line accepted, in ground metres. */
+export const MAX_PROFILE_M = 10_000;
+
+const round = (v: number, digits: number) =>
+  Math.round(v * 10 ** digits) / 10 ** digits;
+
+/**
+ * Elevation profile along a GeoJSON LineString: heights every
+ * `profileStep(length)` ground metres, from LiDAR HD where it is flown and
+ * RGE ALTI elsewhere. Only the 512-cell blocks the line crosses are loaded.
+ * Positions are left out: the page recomputes them with `sampleProfile`.
+ */
+export const handleProfile = async (coordinates: unknown) => {
+  if (
+    !Array.isArray(coordinates) ||
+    coordinates.length < 2 ||
+    !coordinates.every(
+      (c) => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]),
+    )
+  )
+    throw new Error("profile must be LineString coordinates");
+  const points = (coordinates as [number, number][]).map(([lng, lat]) => ({
+    lng,
+    lat,
+  }));
+  const length = ringPerimeterM(points, false);
+  if (length > MAX_PROFILE_M) throw new RangeError("profile longer than 10 km");
+  const step = profileStep(length);
+  const cellSize = length > 3000 ? 1 : 0.5;
+  const xy: XY[] = [];
+  const samples = sampleProfile(points, step, (p) => {
+    xy.push(p);
+    return NaN;
+  });
+  const opts = { cellSize, tileM: 512 * cellSize, retries: 1 };
+  const h = await loadHeightsAt(xy, {
+    ...opts,
+    layer: ELEVATION_LAYERS.lidarMntL93,
+    tolerateFailures: true,
+  });
+  const missing = xy.flatMap((_, i) => (Number.isNaN(h[i]) ? [i] : []));
+  let source = "LiDAR HD";
+  if (missing.length) {
+    const fill = await loadHeightsAt(
+      missing.map((i) => xy[i]),
+      { ...opts, layer: ELEVATION_LAYERS.lidarMntMixed },
+    );
+    missing.forEach((i, k) => (h[i] = fill[k]));
+    source = missing.length === xy.length ? "RGE ALTI" : "LiDAR HD + RGE ALTI";
+  }
+  return {
+    step,
+    cellSize,
+    source,
+    d: samples.map((s) => round(s.d, 2)),
+    h: Array.from(h, (v) => (Number.isNaN(v) ? null : round(v, 3))),
+  };
 };

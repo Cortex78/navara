@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { lambert93ToLngLat } from "../src/geo/lambert93";
+
 import { keyValue, KEY_PATTERN, MAX_KEYS } from "./keys";
-import { handleProxy, toBase64 } from "./proxy";
+import { handleProfile, handleProxy, toBase64 } from "./proxy";
 
 const decode = (b64: string) =>
   Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -78,5 +80,49 @@ describe("handleProxy", () => {
         Array.from({ length: MAX_KEYS + 1 }, () => "kind=ortho&z=1&x=0&y=0"),
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe("handleProfile", () => {
+  it("fills the stretch LiDAR HD has not flown from RGE ALTI", async () => {
+    // LiDAR HD stops at x = 825150; the gap-filled layer covers it all.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL | Request) => {
+        const q = new URL(String(url)).searchParams;
+        const lidar = (q.get("LAYERS") ?? "").includes("LAMB93");
+        const [minX, , maxX] = (q.get("BBOX") ?? "").split(",").map(Number);
+        const w = Number(q.get("WIDTH"));
+        const h = Number(q.get("HEIGHT"));
+        const cs = (maxX - minX) / w;
+        const data = new Float32Array(w * h);
+        for (let r = 0; r < h; r++)
+          for (let c = 0; c < w; c++) {
+            const x = minX + (c + 0.5) * cs;
+            data[r * w + c] = lidar && x > 825150 ? -9999 : (x - 825000) / 100;
+          }
+        return new Response(data.buffer);
+      }),
+    );
+    const line = [
+      lambert93ToLngLat({ x: 825000, y: 6277000 }),
+      lambert93ToLngLat({ x: 825300, y: 6277000 }),
+    ].map(({ lng, lat }) => [lng, lat]);
+    const out = await handleProfile(line);
+    expect(out.step).toBe(1);
+    expect(out.source).toBe("LiDAR HD + RGE ALTI");
+    expect(out.d).toHaveLength(out.h.length);
+    expect(out.d.length).toBeGreaterThan(300);
+    expect(out.h.every((v) => v !== null)).toBe(true);
+    expect(out.h[out.h.length - 1]).toBeCloseTo(3, 2);
+  });
+
+  it("refuses lines over 10 km", async () => {
+    await expect(
+      handleProfile([
+        [4.5, 43.5],
+        [4.7, 43.5],
+      ]),
+    ).rejects.toThrow(/10 km/);
   });
 });
