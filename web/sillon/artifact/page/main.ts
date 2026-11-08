@@ -45,6 +45,7 @@ import {
 
 import { onActivity, track } from "./activity";
 import {
+  duotoneInto,
   duotoneTile,
   GAIA_RELIEF,
   gaiaReliefCss,
@@ -60,7 +61,14 @@ import {
   type McpLike,
 } from "./live";
 import { cutFillPng, surfaceLayers, surfaceSources } from "./surface";
-import { grouped, height as formatHeight, l93, latLonDms } from "./units";
+import {
+  grouped,
+  height as formatHeight,
+  l93,
+  latLonDms,
+  signedFixed,
+  technicalCaps,
+} from "./units";
 
 /*
  * Sillon, artifact edition. Two data sources:
@@ -262,16 +270,17 @@ const tileCellSize = (z: number, x: number, y: number) => {
   return ((b.maxX - b.minX) / 256) * Math.cos((lat * Math.PI) / 180);
 };
 
-/** Grey relief, 4× vertical: the delta's 1–2 m levees and ditches stand out. */
+/**
+ * Relief shading, 4× vertical so the delta's 1–2 m levees and ditches stand
+ * out, graded to the GAïa duotone like the imagery: shadow to ultramarine,
+ * light to bone, no greys.
+ */
 const shadePng = async (heightsWithBorder: Float32Array, cell: number) => {
   const shade = hillshade(heightsWithBorder, 256, 256, cell, { zFactor: 4 });
   const rgb = new Uint8Array(256 * 256 * 3);
   for (let k = 0; k < shade.length; k++) {
     const v = Number.isNaN(shade[k]) ? 0.7 : shade[k];
-    // A faint warm cast keeps the grey from reading as cold concrete.
-    rgb[k * 3] = Math.min(255, Math.round(v * 255 + 6));
-    rgb[k * 3 + 1] = Math.min(255, Math.round(v * 255 + 3));
-    rgb[k * 3 + 2] = Math.round(v * 255);
+    duotoneInto(v * 255, rgb, k * 3);
   }
   return (await encodePngRgb(rgb, 256, 256)).buffer as ArrayBuffer;
 };
@@ -430,9 +439,35 @@ const installProtocol = (pack: PackManifest, grids: Promise<Grids>) => {
         } catch {
           return { data: TRANSPARENT_PNG };
         }
+      case "shade":
+        // IGN's shaded relief, graded to the duotone; clear where it is.
+        return {
+          data: (
+            await memo(key, async () => {
+              const raw =
+                (await packTile(pack.layers.shade, z, x, y)) ??
+                (await ancestorTile(pack.layers.shade, z, x, y));
+              return raw ? duotoneTile(raw, "image/png") : TRANSPARENT_PNG;
+            })
+          ).slice(0),
+        };
+      case "live-shade":
+        try {
+          return {
+            data: (
+              await memo(key, async () =>
+                duotoneTile(
+                  await liveBytes(`kind=shade&z=${z}&x=${x}&y=${y}`),
+                  "image/png",
+                ),
+              )
+            ).slice(0),
+          };
+        } catch {
+          return { data: TRANSPARENT_PNG };
+        }
       case "live-ortho":
       case "live-irc":
-      case "live-shade":
         try {
           return {
             data: await liveBytes(
@@ -667,8 +702,8 @@ const applyRange = (map: MapLibreMap, min: number, max: number) => {
     "color-relief-color",
     reliefExpression(min, max),
   );
-  ui.rangeMin.textContent = min.toFixed(2);
-  ui.rangeMax.textContent = max.toFixed(2);
+  ui.rangeMin.textContent = signedFixed(min, 2);
+  ui.rangeMax.textContent = signedFixed(max, 2);
 };
 
 const acquisitionText = (tiles: LidarTileMetadata[], tileId?: string) => {
@@ -701,7 +736,11 @@ const getMcp = async (): Promise<McpLike | null> => {
   }
 };
 
-const READOUT_IDLE = "Move over the map to read heights";
+/** Touch screens have no hover: the readout follows a tap there. */
+const READOUT_IDLE =
+  typeof matchMedia === "function" && matchMedia("(hover: none)").matches
+    ? "Tap the map to read heights"
+    : "Move over the map to read heights";
 
 /** Remembers which panel sections the viewer closed (this browser only). */
 const rememberSections = () => {
@@ -742,6 +781,8 @@ const start = async () => {
   const togglePanel = () => {
     const off = document.body.classList.toggle("panel-off");
     ui.collapse.setAttribute("aria-expanded", String(!off));
+    // The spine goes away with the panel back: keep focus on a control.
+    if (!off && document.activeElement === ui.spine) ui.collapse.focus();
   };
   ui.collapse.addEventListener("click", togglePanel);
   ui.spine.addEventListener("click", togglePanel);
@@ -828,27 +869,39 @@ const start = async () => {
   ui.packInfo.textContent = packInfo;
   ui.boot.classList.add("done");
   window.setTimeout(() => (ui.boot.hidden = true), 700);
-  installFullscreen([ui.fsBtn, ui.fsExit], () => {
+  installFullscreen(ui.fsBtn, ui.fsExit, () => {
     // The map's own observer catches most box changes; nudge it once more.
     window.setTimeout(() => map.resize(), 60);
   });
   let linkBroken = false;
+  /** The link register: source, then its state word (kept on phones). */
   const renderLink = (busy: number) => {
     const isLive = state.source === "live";
-    ui.linkStatus.dataset.state = linkBroken
+    // A failure belongs to the live link: the pack never severs.
+    const broken = linkBroken && isLive;
+    ui.linkStatus.dataset.state = broken
       ? "error"
       : isLive
         ? busy > 0
           ? "busy"
           : "live"
         : "pack";
-    ui.linkText.textContent = linkBroken
-      ? "Live · severed"
-      : isLive
-        ? busy > 0
-          ? `Live · active · ${busy} in flight`
-          : "Live · idle"
-        : "Pack · active";
+    const part = (cls: string, text: string) => {
+      const el = document.createElement("span");
+      el.className = cls;
+      el.textContent = text;
+      return el;
+    };
+    ui.linkText.replaceChildren(
+      part("ls-src", isLive ? "Live · " : "Pack · "),
+      part(
+        "ls-state",
+        broken ? "severed" : isLive && busy === 0 ? "idle" : "active",
+      ),
+      ...(isLive && !broken && busy > 0
+        ? [part("ls-extra", ` · ${busy} in flight`)]
+        : []),
+    );
   };
   let busyNow = 0;
   onActivity((n) => {
@@ -902,7 +955,9 @@ const start = async () => {
       )
       .then((tiles) => {
         if (seq === liveSeq && state.source === "live")
-          ui.badge.textContent = acquisitionText(tiles, tiles[0]?.tileId);
+          ui.badge.textContent = technicalCaps(
+            acquisitionText(tiles, tiles[0]?.tileId),
+          );
       })
       .catch(() => {});
     if (map.getZoom() < 13.5 || !state.fieldsOn) return;
@@ -936,7 +991,9 @@ const start = async () => {
     fitView();
     const c = map.getCenter();
     if (state.source === "pack")
-      ui.badge.textContent = packBadge(pack, { lng: c.lng, lat: c.lat });
+      ui.badge.textContent = technicalCaps(
+        packBadge(pack, { lng: c.lng, lat: c.lat }),
+      );
     else void refreshLive();
   };
   map.on("moveend", onSettled);
@@ -998,8 +1055,8 @@ const start = async () => {
     ui.srcLive.setAttribute("aria-pressed", String(source === "live"));
     ui.packName.textContent =
       source === "live"
-        ? "Land instrument · Live IGN · France"
-        : `Land instrument · ${pack.name} · LiDAR HD`;
+        ? "LAND INSTRUMENT · LIVE IGN · FRANCE"
+        : `LAND INSTRUMENT · ${pack.name.toUpperCase()} · LiDAR HD`;
     renderLink(busyNow);
     ui.packInfo.textContent = source === "live" ? liveInfo : packInfo;
     ui.goto.placeholder =
@@ -1029,12 +1086,14 @@ const start = async () => {
         bearing: 0,
       });
     }
-    map.setStyle(buildStyle(source, pack, fields));
+    // Listen first: a style that diffs cleanly is swapped inside setStyle,
+    // which fires "style.load" before it returns.
     map.once("style.load", () => {
       applyLayers(map);
       applyRange(map, state.range.min, state.range.max);
       onSettled();
     });
+    map.setStyle(buildStyle(source, pack, fields));
     workbench.onSourceChange();
     if (source === "live") {
       map.once("idle", () => {
@@ -1098,7 +1157,9 @@ const start = async () => {
         setStatus(hit.label);
         flyTo(hit, hit.kind === "municipality" ? 14 : 16);
       })
-      .catch((err) => setStatus(describeMcpError(err), "error"));
+      .catch((err) =>
+        setStatus(describeMcpError(err, "Search again to retry."), "error"),
+      );
   });
 
   ui.imagery.addEventListener("change", () => {
@@ -1134,11 +1195,16 @@ const start = async () => {
   ui.opacity.addEventListener("input", () => {
     state.opacity = Number(ui.opacity.value) / 100;
     ui.opacityOut.textContent = `${ui.opacity.value} %`;
+    ui.opacity.setAttribute("aria-valuetext", `${ui.opacity.value} %`);
     applyLayers(map);
   });
   ui.stretch.addEventListener("input", () => {
     state.stretch = Number(ui.stretch.value);
     ui.stretchOut.textContent = `${ui.stretch.value}×`;
+    ui.stretch.setAttribute(
+      "aria-valuetext",
+      `${ui.stretch.value} times the height`,
+    );
     map.setTerrain({ source: "terrain", exaggeration: state.stretch });
   });
   ui.fit.addEventListener("click", () => {
@@ -1165,12 +1231,49 @@ const start = async () => {
   map.on("mousemove", (e: MapMouseEvent) =>
     readout(e.lngLat.lng, e.lngLat.lat),
   );
-  map
-    .getCanvas()
-    .addEventListener(
-      "mouseleave",
-      () => (ui.readout.textContent = READOUT_IDLE),
-    );
+  ui.readout.textContent = READOUT_IDLE;
+  // A mouse leaving clears the readout; a finger lifting must not (touch
+  // fires a compatibility mouseleave right after the tap it reads).
+  map.getCanvas().addEventListener("pointerleave", (e) => {
+    if (e.pointerType === "mouse") ui.readout.textContent = READOUT_IDLE;
+  });
+
+  // ── Keyboard: the centre mark stands in for the pointer ──
+  const canvas = map.getCanvas();
+  canvas.setAttribute(
+    "aria-label",
+    "Map. Arrow keys move it, plus and minus zoom. Enter selects the farm field under the centre mark; while drawing, Space places a corner there and Enter finishes.",
+  );
+  canvas.addEventListener("keydown", (e) => {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const c = map.getCenter();
+    if (workbench.isEditing()) {
+      // Enter finishes the outline (the drawing's own key handler).
+      if (e.key === " ") {
+        e.preventDefault();
+        workbench.addCorner({ lng: c.lng, lat: c.lat });
+      }
+      return;
+    }
+    e.preventDefault();
+    readout(c.lng, c.lat);
+    if (map.getLayoutProperty("fields-hit", "visibility") === "none") {
+      setStatus("Farm fields are hidden: turn them on under Map.", "info");
+      return;
+    }
+    const hit = map.queryRenderedFeatures(map.project(c), {
+      layers: ["fields-hit"],
+    })[0];
+    const fid = hit?.properties?.fid;
+    const f = typeof fid === "number" ? fields.features[fid] : undefined;
+    if (f) workbench.selectRpg(f);
+    else
+      setStatus(
+        "No farm field under the centre mark. Move the map with the arrow keys, or draw a field.",
+        "info",
+      );
+  });
 
   // ── RPG fields ──
   map.on("click", "fields-hit", (e) => {

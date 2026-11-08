@@ -54,7 +54,7 @@ import { OutlineEditor, type EditorKind } from "./outlineEditor";
 import { drawProfileChart, formatDistance } from "./profileChart";
 import { openFieldStore, type FieldStore, type SavedField } from "./store";
 import { installSurface } from "./surface";
-import { grouped, height as formatHeight } from "./units";
+import { grouped, height as formatHeight, technicalCaps } from "./units";
 
 /*
  * The field workbench: define a field (pick an RPG parcel, draw, import,
@@ -431,6 +431,10 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     drawerCsv: $<HTMLButtonElement>("drawer-csv"),
     drawerClose: $<HTMLButtonElement>("drawer-close"),
     chart: $("chart"),
+    copybox: $("copybox"),
+    copyboxTitle: $("copybox-title"),
+    copyboxText: $<HTMLTextAreaElement>("copybox-text"),
+    copyboxClose: $<HTMLButtonElement>("copybox-close"),
   };
 
   const setOverlay = (key: OverlayKey, features: GeoJSON.Feature[]) => {
@@ -475,6 +479,43 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     ? (host.use("downloads").catch(() => null) as Promise<DownloadsHost | null>)
     : Promise.resolve(null);
 
+  let copyOpener: HTMLElement | null = null;
+  /** The text, selected, for a view that can neither save nor copy for us. */
+  const showCopyBox = (filename: string, text: string) => {
+    if (document.activeElement instanceof HTMLElement)
+      copyOpener = document.activeElement;
+    ui.copyboxTitle.textContent = filename;
+    ui.copyboxText.value = text;
+    ui.copybox.hidden = false;
+    ui.copyboxText.focus();
+    ui.copyboxText.select();
+  };
+  const closeCopyBox = () => {
+    ui.copybox.hidden = true;
+    ui.copyboxText.value = "";
+    if (copyOpener?.isConnected && copyOpener.offsetParent) copyOpener.focus();
+    copyOpener = null;
+  };
+  ui.copyboxClose.addEventListener("click", closeCopyBox);
+  ui.copybox.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      closeCopyBox();
+    }
+  });
+
+  // A view without the downloads capability offers only what it can copy.
+  void downloadsReady.then((downloads) => {
+    if (!host?.use || downloads) return;
+    ui.shp.hidden = true;
+    ui.mineShp.hidden = true;
+    ui.geojson.textContent = "Copy GeoJSON";
+    ui.mineGeojson.textContent = "Copy all · GeoJSON";
+    ui.drawerCsv.textContent = "Copy CSV";
+    const sheet = document.getElementById("sd-sheet");
+    if (sheet) sheet.textContent = "Copy cut sheet · CSV of stakes";
+  });
+
   const offerFile = async (filename: string, data: string | Uint8Array) => {
     const blob = new Blob([data as BlobPart]);
     const downloads = await downloadsReady;
@@ -488,20 +529,19 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
       return;
     }
     if (!downloads) {
-      if (typeof data === "string" && navigator.clipboard) {
-        await navigator.clipboard.writeText(data).then(
-          () =>
-            ctx.setStatus(
-              `Saving files is not available in this view; ${filename} was copied to the clipboard instead.`,
-            ),
-          () =>
-            ctx.setStatus(
-              "Saving files is not available in this view.",
-              "error",
-            ),
-        );
-      } else
+      // No saving here: text goes to the clipboard, or to a box to copy from.
+      if (typeof data !== "string") {
         ctx.setStatus("Saving files is not available in this view.", "error");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(data);
+        ctx.setStatus(
+          `${filename} copied to the clipboard: saving files is not available in this view.`,
+        );
+      } catch {
+        showCopyBox(filename, data);
+      }
       return;
     }
     try {
@@ -544,7 +584,9 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
       el.className = "gx-tag";
       tag = new maplibregl.Marker({ element: el, anchor: "bottom-left" });
     }
-    tag.getElement().textContent = `Target · ${ha.toFixed(2)} ha`;
+    tag.getElement().textContent = technicalCaps(
+      `Target · ${ha.toFixed(2)} ha`,
+    );
     tag.setLngLat([corner.lng, corner.lat]).addTo(map);
   };
 
@@ -696,7 +738,8 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     };
   };
 
-  const measure = () => {
+  /** `keepDesign` when the same field is measured again (source, outline). */
+  const measure = (keepDesign = false) => {
     const f = current;
     if (!f) return;
     const seq = ++measureSeq;
@@ -705,7 +748,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
       renderCard();
       drawFall();
       const { w, note } = packWindow(f);
-      surface.setField(w, note);
+      surface.setField(w, note, keepDesign);
       return;
     }
     const live = ctx.live();
@@ -720,15 +763,23 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
         if (seq !== measureSeq || current !== f) return;
         const w = fieldWindow(grid, polygonsOf(f.geometry));
         if (w)
-          surface.setField(w, `${grid.source}, ${grid.cellSize} m design grid`);
+          surface.setField(
+            w,
+            `${grid.source}, ${grid.cellSize} m design grid`,
+            keepDesign,
+          );
         else
           surface.message(
-            "The field is smaller than one cell of the design grid.",
+            grid.width === 0 || grid.height === 0
+              ? "IGN has no heights for this field: neither LiDAR HD nor RGE ALTI® covers it."
+              : "The field is smaller than one cell of the design grid.",
           );
       })
       .catch((err) => {
         if (seq === measureSeq && current === f)
-          surface.message(describeMcpError(err));
+          surface.message(
+            describeMcpError(err, "Select the field again to retry."),
+          );
       });
     track(live.field(f.geometry.coordinates))
       .then((s) => {
@@ -744,7 +795,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
       })
       .catch((err) => {
         if (seq !== measureSeq || current !== f) return;
-        f.note = describeMcpError(err);
+        f.note = describeMcpError(err, "Select the field again to retry.");
         renderCard();
       });
   };
@@ -752,6 +803,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
   const showField = (
     field: Omit<CurrentField, "stats" | "note" | "dirty"> & { dirty?: boolean },
     fit = false,
+    keepDesign = false,
   ) => {
     current = { ...field, dirty: field.dirty ?? false, stats: null, note: "" };
     setOverlay("current", [
@@ -760,7 +812,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     setOverlay("fall", []);
     drawTarget(current);
     if (fit) fitTo(field.ring);
-    measure();
+    measure(keepDesign);
     renderMine();
   };
 
@@ -940,13 +992,18 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     stopEditor();
     ctx.setStatus("");
     if (editingExisting && current) {
-      showField({
-        ...current,
-        ring: points,
-        geometry: polygonOf(points),
-        declaredHa: null,
-        dirty: true,
-      });
+      // The same field with a new outline: the design the viewer set stays.
+      showField(
+        {
+          ...current,
+          ring: points,
+          geometry: polygonOf(points),
+          declaredHa: null,
+          dirty: true,
+        },
+        false,
+        true,
+      );
     } else {
       showField({
         savedId: null,
@@ -1000,9 +1057,21 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
   ui.toolCancel.addEventListener("click", cancelEditor);
   ui.toolDone.addEventListener("click", finishEditor);
   document.addEventListener("keydown", (e) => {
-    if (!editor || (e.target as HTMLElement)?.tagName === "INPUT") return;
-    if (e.key === "Escape") cancelEditor();
-    else if (e.key === "Enter") finishEditor();
+    if (!editor) return;
+    if (e.key === "Escape") {
+      cancelEditor();
+      return;
+    }
+    // Enter and Backspace belong to the control that has focus (a toolbar
+    // button, a "+" handle, a field): only the map or the page finish or undo.
+    const target = e.target as HTMLElement | null;
+    if (
+      target?.closest(
+        "input, textarea, select, button, a, summary, [contenteditable], .maplibregl-marker",
+      )
+    )
+      return;
+    if (e.key === "Enter") finishEditor();
     else if (e.key === "Backspace" && !editingExisting) {
       e.preventDefault();
       editor.undo();
@@ -1014,11 +1083,18 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
   let profileSamples: ProfileSample[] = [];
   let profileSeq = 0;
 
+  /** What had focus when the profile opened, to give it back on close. */
+  let profileOpener: HTMLElement | null = null;
+
   const closeProfile = () => {
     profileSeq++;
     closeChart?.();
     closeChart = null;
+    const hadFocus = ui.drawer.contains(document.activeElement);
     ui.drawer.hidden = true;
+    if (hadFocus && profileOpener?.isConnected && profileOpener.offsetParent)
+      profileOpener.focus();
+    profileOpener = null;
     document.body.classList.remove("profile-open");
     setOverlay("profile", []);
     setOverlay("cursor", []);
@@ -1039,6 +1115,8 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     closeChart?.();
     closeChart = null;
     profileSamples = [];
+    if (ui.drawer.hidden && document.activeElement instanceof HTMLElement)
+      profileOpener = document.activeElement;
     ui.drawer.hidden = false;
     document.body.classList.add("profile-open");
     ui.drawerTitle.textContent = title;
@@ -1091,7 +1169,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
         ui.drawerStats.textContent =
           e instanceof Error && !("code" in e)
             ? e.message
-            : describeMcpError(e);
+            : describeMcpError(e, "Draw the profile again to retry.");
       return;
     }
     if (seq !== profileSeq) return;
@@ -1328,11 +1406,19 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     /** Cut or fill under the cursor when a design is on, for the readout. */
     describeAt: (p: LngLat) => surface.describeAt(p),
     isEditing: () => editor !== null,
+    /** A corner at `p` while drawing: the keyboard's click on the map. */
+    addCorner: (p: LngLat) => {
+      if (editor?.addPoint(p)) return;
+      ctx.setStatus(
+        "Corners are moved by dragging while an outline is edited.",
+        "info",
+      );
+    },
     /** The data source changed: drop what was measured on the old one. */
     onSourceChange: () => {
       cancelEditor();
       closeProfile();
-      if (current) measure();
+      if (current) measure(true);
     },
   };
 };

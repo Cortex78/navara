@@ -7,7 +7,7 @@
           GAÏA <span class="gx-sep" aria-hidden="true">·</span> SILLON
         </h1>
         <p class="gx-sub" id="pack-name">
-          Land instrument · Camargue · LiDAR HD
+          LAND INSTRUMENT · CAMARGUE · LiDAR HD
         </p>
       </div>
     </div>
@@ -44,7 +44,8 @@
   </header>
 
   <main class="gx-stage" id="stage">
-    <div id="map" aria-label="Map of the field and its LiDAR terrain"></div>
+    <div id="map"></div>
+    <div class="gx-kbd-mark" aria-hidden="true"></div>
 
     <div class="gx-boot" id="boot" role="status">
       <div class="gx-frame">
@@ -96,6 +97,36 @@
       <div class="gx-chart-host" id="chart"></div>
     </section>
 
+    <section
+      class="gx-copybox gx-frame"
+      id="copybox"
+      role="dialog"
+      aria-labelledby="copybox-title"
+      hidden
+    >
+      <header class="gx-drawer-head">
+        <h2 id="copybox-title">Copy</h2>
+        <button
+          type="button"
+          class="gx-btn gx-btn-icon"
+          id="copybox-close"
+          aria-label="Close"
+        >
+          ×
+        </button>
+      </header>
+      <p class="gx-hint" id="copybox-note">
+        Saving files is not available in this view. The text is selected: copy
+        it, then paste it into a file.
+      </p>
+      <textarea
+        id="copybox-text"
+        readonly
+        rows="8"
+        spellcheck="false"
+      ></textarea>
+    </section>
+
     <button
       type="button"
       class="gx-btn gx-spine"
@@ -110,7 +141,7 @@
       type="button"
       class="gx-btn gx-exit"
       id="fs-exit"
-      title="Exit full screen (F)"
+      title="Exit full screen (F or Escape)"
     >
       Exit full screen
     </button>
@@ -298,10 +329,17 @@
                 >Contours</span
               ></label
             >
+          </div>
+          <div class="gx-contour-row" id="sd-contour-row">
+            <p class="gx-contour-key" id="sd-contour-key">
+              <span class="ck ck-exist" aria-hidden="true"></span>ground
+              <span class="ck ck-design" aria-hidden="true"></span>design
+              <span id="sd-major"></span>
+            </p>
             <label class="gx-select-sm" for="sd-interval"
-              ><span class="sr">Contour interval</span>
+              ><span class="gx-label">Interval</span>
               <select id="sd-interval">
-                <option value="auto">Auto</option>
+                <option value="auto" id="sd-interval-auto">Auto</option>
                 <option value="5">5 cm</option>
                 <option value="10">10 cm</option>
                 <option value="20">20 cm</option>
@@ -311,10 +349,12 @@
             >
           </div>
           <div class="gx-cf-legend" id="sd-legend"></div>
-          <p class="gx-hint" id="sd-note"></p>
+          <p class="gx-hint" id="sd-note" role="status"></p>
+          <p class="sr" id="sd-live" role="status"></p>
           <button type="button" class="gx-btn" id="sd-sheet">
             Cut sheet · CSV of stakes
           </button>
+          <p class="gx-hint" id="sd-sheet-note"></p>
         </div>
       </details>
 
@@ -415,7 +455,9 @@
           </label>
           <div class="gx-legend" id="legend">
             <div class="gx-legend-head">
-              <span class="gx-label">Elevation · m NGF-IGN69</span>
+              <span class="gx-label"
+                >Elevation · <span class="u">m</span> NGF-IGN69</span
+              >
               <button type="button" class="gx-link" id="fit">
                 Fit to view
               </button>

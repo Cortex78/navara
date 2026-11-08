@@ -58,6 +58,7 @@ const body = readFileSync(here("./page/body.html"), "utf8");
 const script = (await bundlePage()).replaceAll("</script", "<\\/script");
 
 const html = `<title>Sillon Camargue</title>
+<meta name="claude:viewport-fit-sides" content="cover" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@1,6..72,400&display=swap" />

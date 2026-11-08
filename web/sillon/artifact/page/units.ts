@@ -39,3 +39,18 @@ export const latLonDms = (lat: number, lng: number) =>
 /** "L93 E 825 512.3 · N 6 277 610.1" */
 export const l93 = (x: number, y: number) =>
   `L93 E ${grouped(x)} · N ${grouped(y)}`;
+
+/**
+ * Capitals for the Technical register, typed rather than left to CSS
+ * text-transform, so tokens keep their canonical casing: "LiDAR", and unit
+ * symbols after a number ("20 m", "15.25 ha", "13.9 pts/m²").
+ */
+export const technicalCaps = (text: string) =>
+  text
+    .toUpperCase()
+    .replace(/LIDAR/g, "LiDAR")
+    .replace(
+      /(\d) ?(PTS\/M²|M²|M³|CM|MM|KM|HA|M)(?![A-Z0-9²³])/g,
+      (all, d: string, unit: string) =>
+        `${d}${all.includes(" ") ? " " : ""}${unit.toLowerCase()}`,
+    );

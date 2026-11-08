@@ -62,8 +62,15 @@ export const describeEdgeError = (message?: string): string | null => {
   return `Live IGN could not serve this${reason ? `: ${reason}` : ` (HTTP ${m[1]})`}. Try again in a moment.`;
 };
 
-/** What to tell the viewer when a connector call fails, by error code. */
-export const describeMcpError = (e: unknown): string => {
+/**
+ * What to tell the viewer when a connector call fails, by error code.
+ * `retry` says how to try again where a timeout is worth retrying: panning
+ * reloads tiles, but a field or a profile has to be asked for again.
+ */
+export const describeMcpError = (
+  e: unknown,
+  retry = "Pan the map to try again.",
+): string => {
   const { code, message } = (e ?? {}) as McpError;
   switch (code) {
     case "not_in_manifest":
@@ -76,7 +83,7 @@ export const describeMcpError = (e: unknown): string => {
     case "needs_reauth":
       return "Reconnect Supabase in claude.ai Settings → Connectors to use live IGN data.";
     case "server_unavailable":
-      return "Supabase did not answer in time. Pan the map to try again.";
+      return `Supabase did not answer in time. ${retry}`;
     case "tool_error":
       return (
         describeEdgeError(message) ??

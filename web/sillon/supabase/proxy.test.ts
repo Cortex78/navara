@@ -373,7 +373,7 @@ describe("handleFieldGrid", () => {
     ]);
   });
 
-  it("falls back to RGE ALTI when the LiDAR HD layer fails to load", async () => {
+  it("falls back to the mixed layer when the LiDAR HD layer fails to load", async () => {
     const surface = (x: number) => 7 + (x - 825000) / 100;
     stubWms((x) => surface(x));
     const wms = globalThis.fetch as unknown as (
@@ -392,11 +392,12 @@ describe("handleFieldGrid", () => {
       ),
     );
     const grid = await handleFieldGrid(rect);
-    expect(grid).toMatchObject({ source: "RGE ALTI", base: 7 });
+    // The mixed layer serves LiDAR HD where flown: not called RGE ALTI.
+    expect(grid).toMatchObject({ source: "LiDAR HD + RGE ALTI", base: 7 });
     expect(checkField(readGrid(grid), rect, surface).missing).toBe(0);
     const stats = await handleField(rect);
     expect(stats).toMatchObject({
-      source: "RGE ALTI",
+      source: "LiDAR HD + RGE ALTI",
       slopePct: expect.closeTo(1, 2),
     });
   });
@@ -414,6 +415,15 @@ describe("handleFieldGrid", () => {
     expect(check.stray).toBe(0);
     expect(check.missing / check.inside).toBeCloseTo(0.25, 6);
     expect(check.maxError).toBeLessThanOrEqual(0.005 + 1e-6);
+  });
+
+  it("names a field LiDAR HD flies in part 'LiDAR HD + RGE ALTI'", async () => {
+    // LiDAR HD stops 10 m into the 40 m wide field: under half is flown.
+    const surface = (x: number) => 7 + (x - 825000) / 100;
+    stubWms((x, _y, lidar) => (lidar && x > 825010.2 ? NaN : surface(x)));
+    const out = await handleFieldGrid(rect);
+    expect(out.source).toBe("LiDAR HD + RGE ALTI");
+    expect(out.layer).toBe(ELEVATION_LAYERS.lidarMntMixed);
   });
 
   it("answers 0 × 0 for a field neither layer has heights for", async () => {

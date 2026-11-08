@@ -1,9 +1,9 @@
-import type {
-  GeoJSONSource,
-  ImageSource,
-  LayerSpecification,
-  Map as MapLibreMap,
-  SourceSpecification,
+import maplibregl, {
+  type GeoJSONSource,
+  type ImageSource,
+  type LayerSpecification,
+  type Map as MapLibreMap,
+  type SourceSpecification,
 } from "maplibre-gl";
 
 import {
@@ -15,6 +15,7 @@ import {
   autoMaxDepth,
   cutFillRgba,
   legendStops,
+  rampColor,
   windowCorners,
   type CutFillStyle,
 } from "../../src/dem/cutFillRaster";
@@ -39,7 +40,7 @@ import {
 } from "../../src/geo/lambert93";
 
 import { CUT_FILL_RAMP, MAP } from "./brand";
-import { height as fmtHeight, grouped } from "./units";
+import { height as fmtHeight, grouped, signedFixed } from "./units";
 
 /*
  * Surface design: the field's target surface (its natural fall, a slope
@@ -52,6 +53,19 @@ export type SurfaceMode = "fit" | "slope" | "level";
 
 /** Fewer heights than this inside a field and no design is offered. */
 const MIN_DESIGN_CELLS = 12;
+
+/** Every n-th contour is drawn heavy. */
+const MAJOR_EVERY = 5;
+
+/** Most contour labels on the map at once. */
+const MAX_LABELS = 24;
+
+/** Cut-sheet stakes: every 10 m, every 20 m over 50 ha. */
+const stakeSpacing = (w: FieldWindow) => (w.areaM2 > 500_000 ? 20 : 10);
+
+/** "20 cm" below a metre, "1.00 m" from a metre. */
+const lengthText = (m: number) =>
+  m < 1 ? `${Math.round(m * 100)} cm` : `${m.toFixed(2)} m`;
 
 const collection = (
   features: GeoJSON.Feature[] = [],
@@ -260,6 +274,8 @@ export type SurfaceResult = {
   works: Earthworks;
   fall: { slopePct: number; fallDeg: number };
   ratio: number;
+  /** How far the design was raised (+) or lowered (−) after balancing, cm. */
+  offsetCm: number;
   /** Lower bound on the mean haul, ground metres (0 when nothing moves). */
   haulMeanM: number;
 };
@@ -297,6 +313,11 @@ export const installSurface = (ctx: SurfaceContext) => {
     legend: $("sd-legend"),
     sheet: $<HTMLButtonElement>("sd-sheet"),
     note: $("sd-note"),
+    live: $("sd-live"),
+    contourRow: $("sd-contour-row"),
+    major: $("sd-major"),
+    intervalAuto: $<HTMLOptionElement>("sd-interval-auto"),
+    sheetNote: $("sd-sheet-note"),
   };
 
   const st = {
@@ -332,8 +353,10 @@ export const installSurface = (ctx: SurfaceContext) => {
     (map.getSource(id) as GeoJSONSource | undefined)?.setData(fc);
 
   /**
-   * Runs `fn` once the style's layers exist. Not isStyleLoaded(): that stays
-   * false while any tile is still loading, and "style.load" never fires again.
+   * Runs `fn` once the style's layers exist: now, or at the first
+   * "style.load" while the map starts. Not isStyleLoaded(): that stays false
+   * while any tile is still loading. (A data-source switch rebuilds the
+   * style by a diff, inside setStyle, so the layers are back when it returns.)
    */
   const whenStyleReady = (fn: () => void) => {
     if (map.getLayer("sd-contour-exist")) fn();
@@ -354,17 +377,10 @@ export const installSurface = (ctx: SurfaceContext) => {
       [
         "Cut : fill",
         Number.isFinite(k.ratio)
-          ? `${k.ratio.toFixed(2)} · target ${st.ratio.toFixed(2)}`
+          ? `${k.ratio.toFixed(2)} · target ${last.ratio.toFixed(2)}`
           : "all cut",
       ],
-      [
-        "Balance",
-        Math.abs(k.netM3) < 0.5
-          ? "balanced"
-          : k.netM3 > 0
-            ? `${whole(k.netM3)} m³ surplus to haul off`
-            : `${whole(-k.netM3)} m³ to bring in`,
-      ],
+      ["Balance", balanceText(last)],
       ["Per hectare", `${whole(k.m3PerHa)} m³/ha cut`],
       [
         "Depth",
@@ -396,17 +412,42 @@ export const installSurface = (ctx: SurfaceContext) => {
   };
 
   /**
-   * The mean haul. A lower bound ("≥") when cut and fill balance; with a
-   * surplus or a shortfall part of the soil leaves or arrives by road, so the
-   * figure is only an estimate ("≈"). The centres' distance is added when it
-   * says something else: the net direction the soil travels.
+   * The design's balance against its target ratio: cut − ratio × fill, in
+   * cut (bank) m³. Above a ratio of 1 the spare cut is the allowance for
+   * fill that shrinks as it is compacted, not soil to haul off. `met` when the
+   * solver's exact balance holds (raising or lowering the design breaks it).
+   */
+  const balanceOf = (r: SurfaceResult) => {
+    const k = r.works;
+    const spare = k.cutM3 - r.ratio * k.fillM3;
+    return { spare, met: Math.abs(spare) <= Math.max(0.5, 1e-4 * k.cutM3) };
+  };
+
+  const balanceText = (r: SurfaceResult) => {
+    const k = r.works;
+    const { spare, met } = balanceOf(r);
+    const at = r.ratio === 1 ? "" : ` at ${r.ratio.toFixed(2)}`;
+    if (met)
+      return r.ratio === 1 || k.cutM3 - k.fillM3 < 0.5
+        ? `balanced${at}`
+        : `balanced${at} · ${whole(k.cutM3 - k.fillM3)} m³ allowed for shrinkage`;
+    return spare > 0
+      ? `${whole(spare)} m³ surplus to haul off${at}`
+      : `${whole(-spare)} m³ to bring in${at}`;
+  };
+
+  /**
+   * The mean haul. A lower bound ("≥") while every m³ of cut goes into the
+   * fill, i.e. the target ratio is met; with a surplus or a shortfall part of
+   * the soil leaves or arrives by road, so the figure is only an estimate
+   * ("≈"). The centres' distance is added when it says something else: the
+   * net direction the soil travels.
    */
   const haulText = (r: SurfaceResult) => {
     const k = r.works;
     if (!(r.haulMeanM > 0)) return "–";
-    const balanced = Math.abs(k.netM3) <= 0.02 * Math.max(k.cutM3, k.fillM3);
-    const mean = `${balanced ? "≥" : "≈"} ${whole(r.haulMeanM)} m mean`;
-    return k.haulM < 0.9 * r.haulMeanM
+    const mean = `${balanceOf(r).met ? "≥" : "≈"} ${whole(r.haulMeanM)} m mean`;
+    return k.haulM >= 5 && k.haulM < 0.9 * r.haulMeanM
       ? `${mean} · centres ${whole(k.haulM)} m apart`
       : mean;
   };
@@ -504,11 +545,42 @@ export const installSurface = (ctx: SurfaceContext) => {
     setSourceData("sd-fall", data.fall);
   };
 
+  let labels: maplibregl.Marker[] = [];
+  /** Each ground contour level, once, on its longest line, in m NGF-IGN69. */
+  const drawLabels = () => {
+    for (const m of labels) m.remove();
+    labels = [];
+    if (!st.showContours || !w) return;
+    const longest = new Map<number, GeoJSON.Position[]>();
+    for (const f of existContours) {
+      if (f.geometry.type !== "LineString") continue;
+      const level = Number(f.properties?.level);
+      const c = f.geometry.coordinates;
+      if (c.length > (longest.get(level)?.length ?? 1)) longest.set(level, c);
+    }
+    const levels = [...longest.keys()].sort((a, b) => a - b);
+    // Too many levels to label each: every n-th, the heavy ones first.
+    const step = Math.ceil(levels.length / MAX_LABELS);
+    for (const [i, level] of levels.entries()) {
+      if (i % step !== 0) continue;
+      const c = longest.get(level) as GeoJSON.Position[];
+      const [lng, lat] = c[Math.floor(c.length / 2)];
+      const el = document.createElement("div");
+      el.className = "gx-clabel";
+      el.textContent = signedFixed(level, 2);
+      labels.push(
+        new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map),
+      );
+    }
+  };
+
   const pushContours = () => {
     data.contours = collection(
       st.showContours ? [...existContours, ...designContours] : [],
     );
     setSourceData("sd-contours", data.contours);
+    ui.contourRow.hidden = !st.showContours || !w;
+    drawLabels();
   };
 
   const computeExistContours = () => {
@@ -524,13 +596,16 @@ export const installSurface = (ctx: SurfaceContext) => {
     if (!Number.isFinite(lo)) return;
     intervalUsed =
       st.interval === "auto" ? autoInterval(lo, hi, 14) : st.interval;
+    ui.intervalAuto.textContent =
+      st.interval === "auto" ? `Auto · ${lengthText(intervalUsed)}` : "Auto";
+    ui.major.textContent = `· heavy every ${lengthText(intervalUsed * MAJOR_EVERY)}`;
     // About 2 m of smoothing: LiDAR texture would otherwise fray every line.
     const radius = Math.max(1, Math.round(2 / cellSize));
     const smooth = smoothValues(w.grid.data, width, height, radius);
     try {
       existContours = contourLines(w.grid, smooth, {
         interval: intervalUsed,
-        majorEvery: 5,
+        majorEvery: MAJOR_EVERY,
       }).map((f) => ({ ...f, properties: { ...f.properties, kind: "exist" } }));
     } catch (e) {
       if (e instanceof RangeError) {
@@ -547,7 +622,7 @@ export const installSurface = (ctx: SurfaceContext) => {
     try {
       designContours = contourLines(g, g.data, {
         interval: intervalUsed,
-        majorEvery: 5,
+        majorEvery: MAJOR_EVERY,
       }).map((f) => ({
         ...f,
         properties: { ...f.properties, kind: "design" },
@@ -555,6 +630,16 @@ export const installSurface = (ctx: SurfaceContext) => {
     } catch {
       designContours = [];
     }
+  };
+
+  /**
+   * Removes the cut/fill image. MapLibre keeps an image source's old picture
+   * and corners until the new one has loaded, which can wait behind live tile
+   * requests: a new field starts from no image rather than the last field's.
+   */
+  const dropRaster = () => {
+    if (map.getLayer("sd-cutfill")) map.removeLayer("sd-cutfill");
+    if (map.getSource("sd-cutfill")) map.removeSource("sd-cutfill");
   };
 
   let mapShown = false;
@@ -572,34 +657,73 @@ export const installSurface = (ctx: SurfaceContext) => {
     }
   };
 
+  /**
+   * The cut/fill key: the map's own colours along −maxM … +maxM, each band to
+   * scale (read with rampColor, so key and map cannot disagree), the class
+   * edges printed under it, and the ends saying where the colour saturates.
+   */
   const renderLegend = () => {
     if (!style || !w) {
       ui.legend.replaceChildren();
       return;
     }
-    const stops = legendStops(CUT_FILL_RAMP, style);
+    const cs = style;
+    const { maxM, bandM, onGradeM } = cs;
+    const pct = (d: number) => ((d + maxM) / (2 * maxM)) * 100;
+    const edges = [-maxM, 0, maxM];
+    if (onGradeM > 0) edges.push(-onGradeM, onGradeM);
+    if (bandM > 0)
+      for (let e = bandM; e < maxM - 1e-6; e += bandM) edges.push(e, -e);
+    edges.sort((a, b) => a - b);
+    const cuts = edges.filter((v, i) => i === 0 || v - edges[i - 1] > 1e-6);
+    const stops: string[] = [];
+    for (let i = 0; i + 1 < cuts.length; i++) {
+      const [r, g, b, a] = rampColor(
+        CUT_FILL_RAMP,
+        cs,
+        (cuts[i] + cuts[i + 1]) / 2,
+      );
+      const c = `rgb(${r} ${g} ${b} / ${(a / 255).toFixed(3)})`;
+      stops.push(
+        `${c} ${pct(cuts[i]).toFixed(2)}%`,
+        `${c} ${pct(cuts[i + 1]).toFixed(2)}%`,
+      );
+    }
+    const m2 = (d: number) => d.toFixed(2);
     const bar = document.createElement("div");
     bar.className = "cf-bar";
-    for (const s of stops) {
-      const sw = document.createElement("span");
-      sw.style.background = s.color;
-      sw.title = s.label;
-      bar.append(sw);
+    bar.style.background = `linear-gradient(90deg, ${stops.join(", ")})`;
+    bar.setAttribute("role", "img");
+    bar.setAttribute(
+      "aria-label",
+      `Cut and fill colours: fill on the left, deepest from ${m2(maxM)} m; on grade within ${Math.round(onGradeM * 100)} cm in the middle; cut on the right, deepest from ${m2(maxM)} m.`,
+    );
+    // Class edges inside the bar, mirrored on both sides.
+    const inner = legendStops(CUT_FILL_RAMP, cs)
+      .map((t) => t.from)
+      .filter((d) => d > onGradeM + 1e-6 && d < maxM - 1e-6);
+    const ticks = document.createElement("div");
+    ticks.className = "cf-ticks";
+    ticks.setAttribute("aria-hidden", "true");
+    for (const d of [...inner.map((v) => -v), ...inner]) {
+      const t = document.createElement("span");
+      t.style.left = `${pct(d).toFixed(2)}%`;
+      t.textContent = m2(Math.abs(d));
+      ticks.append(t);
     }
     const scale = document.createElement("div");
     scale.className = "cf-scale";
-    const first = stops[0];
-    const lastStop = stops[stops.length - 1];
+    scale.setAttribute("aria-hidden", "true");
     for (const text of [
-      `fill ${first ? first.label.replace("−", "") : ""}`,
-      "on grade",
-      `cut ${lastStop ? lastStop.label.replace("+", "") : ""}`,
+      `FILL ≥ ${m2(maxM)} m`,
+      `ON GRADE ±${Math.round(onGradeM * 100)} cm`,
+      `CUT ≥ ${m2(maxM)} m`,
     ]) {
       const t = document.createElement("span");
       t.textContent = text;
       scale.append(t);
     }
-    ui.legend.replaceChildren(bar, scale);
+    ui.legend.replaceChildren(bar, ticks, scale);
   };
 
   const renderRaster = async () => {
@@ -691,6 +815,14 @@ export const installSurface = (ctx: SurfaceContext) => {
       ui.cross.value = st.crossPct.toFixed(2);
     ui.compass.textContent = compassPoint(st.bearingDeg);
     ui.offsetOut.textContent = `${st.offsetCm > 0 ? "+" : st.offsetCm < 0 ? "−" : "±"}${Math.abs(st.offsetCm)} cm`;
+    ui.offset.setAttribute(
+      "aria-valuetext",
+      st.offsetCm > 0
+        ? `raised ${st.offsetCm} cm`
+        : st.offsetCm < 0
+          ? `lowered ${-st.offsetCm} cm`
+          : "as balanced",
+    );
     ui.showMap.checked = st.showMap;
     ui.showContours.checked = st.showContours;
   };
@@ -716,7 +848,7 @@ export const installSurface = (ctx: SurfaceContext) => {
       transportHaulM(w, res.works.depth),
       res.works.haulM,
     );
-    last = { ...res, spec, ratio: st.ratio, haulMeanM };
+    last = { ...res, spec, ratio: st.ratio, offsetCm: st.offsetCm, haulMeanM };
     if (contoursToo) computeExistContours();
     computeDesignContours();
     renderWorks();
@@ -726,6 +858,8 @@ export const installSurface = (ctx: SurfaceContext) => {
     void renderRaster();
     showNote();
     ui.sheet.disabled = false;
+    // One polite line for screen readers: the table itself changes silently.
+    ui.live.textContent = `Cut ${whole(last.works.cutM3)} m³, fill ${whole(last.works.fillM3)} m³, ${balanceText(last)}.`;
   };
 
   // ── Inputs ──
@@ -811,9 +945,11 @@ export const installSurface = (ctx: SurfaceContext) => {
     if (!w || !last) return "";
     const plane = last.plane;
     const { originX, originY, cellSize, width, height } = w.grid;
-    const spacing = w.areaM2 > 500_000 ? 20 : 10;
+    const spacing = stakeSpacing(w);
+    // A 20 m context grid does not know heights to the millimetre.
+    const dp = w.grid.cellSize >= 5 ? 2 : 3;
     const rows = [
-      "stake,easting_l93,northing_l93,lng,lat,existing_m,design_m,cut_m",
+      "stake,easting_l93,northing_l93,lng,lat,existing_ngf69_m,design_ngf69_m,cut_m",
     ];
     let n = 0;
     const x0 = Math.ceil(originX / spacing) * spacing;
@@ -830,7 +966,7 @@ export const installSurface = (ctx: SurfaceContext) => {
         const { lng, lat } = lambert93ToLngLat({ x, y });
         n++;
         rows.push(
-          `${n},${x.toFixed(1)},${y.toFixed(1)},${lng.toFixed(7)},${lat.toFixed(7)},${e.toFixed(3)},${d.toFixed(3)},${(e - d).toFixed(3)}`,
+          `${n},${x.toFixed(1)},${y.toFixed(1)},${lng.toFixed(7)},${lat.toFixed(7)},${e.toFixed(dp)},${d.toFixed(dp)},${(e - d).toFixed(dp)}`,
         );
       }
     }
@@ -839,13 +975,26 @@ export const installSurface = (ctx: SurfaceContext) => {
   ui.sheet.addEventListener("click", () => {
     const csv = cutSheet();
     if (!csv) return;
-    void ctx.offerFile(`${ctx.fieldStem()}-cut-sheet.csv`, csv);
+    void ctx.offerFile(
+      `${ctx.fieldStem()}-cut-sheet-${w ? stakeSpacing(w) : 10}m.csv`,
+      csv,
+    );
   });
 
   // ── API ──
-  const setField = (window_: FieldWindow | null, why = "") => {
+  /**
+   * Shows the design for a field window. `keep` when the same field was
+   * measured again (another data source, an edited outline): the slope,
+   * bearing, cross fall and offset the viewer set stay; a new field starts
+   * from its natural fall.
+   */
+  const setField = (window_: FieldWindow | null, why = "", keep = false) => {
     if (window_ && window_.validCount < MIN_DESIGN_CELLS) {
-      message(why || "Too few heights inside this field to design it.");
+      message(
+        ["Too few heights inside this field to design it.", why]
+          .filter(Boolean)
+          .join(" "),
+      );
       return;
     }
     w = window_;
@@ -853,6 +1002,7 @@ export const installSurface = (ctx: SurfaceContext) => {
     contourNote = "";
     last = null;
     rasterSeq++;
+    dropRaster();
     ui.section.hidden = !w;
     ui.sheet.disabled = true;
     if (!w) {
@@ -880,13 +1030,16 @@ export const installSurface = (ctx: SurfaceContext) => {
       ]
         .filter(Boolean)
         .join(" ");
+    ui.sheetNote.textContent = `Stakes every ${stakeSpacing(w)} m · heights m NGF-IGN69 · cut +, fill − · from the ${w.grid.cellSize} m grid`;
     fit = robustFit(w);
-    const nat = naturalFall();
-    st.mainPct = nat.pct;
-    st.bearingDeg = nat.deg;
-    st.crossPct = 0;
-    st.offsetCm = 0;
-    ui.offset.value = "0";
+    if (!keep) {
+      const nat = naturalFall();
+      st.mainPct = nat.pct;
+      st.bearingDeg = nat.deg;
+      st.crossPct = 0;
+      st.offsetCm = 0;
+      ui.offset.value = "0";
+    }
     syncInputs();
     compute(true);
   };
@@ -899,9 +1052,12 @@ export const installSurface = (ctx: SurfaceContext) => {
     w = null;
     last = null;
     rasterSeq++;
+    dropRaster();
     ui.section.hidden = false;
     ui.works.replaceChildren();
     ui.legend.replaceChildren();
+    ui.live.textContent = "";
+    ui.sheetNote.textContent = "";
     baseNote = text;
     contourNote = "";
     showNote();
@@ -928,33 +1084,44 @@ export const installSurface = (ctx: SurfaceContext) => {
     if (!w.inside[i]) return null;
     const e = sampleGrid(w.grid, { x, y });
     if (Number.isNaN(e)) return null;
-    const z = designHeight(last.plane, x, y);
-    const d = e - z;
+    // To the centimetre first, so the printed cut is ground − design exactly.
+    const ground = Math.round(e * 100) / 100;
+    const z = Math.round(designHeight(last.plane, x, y) * 100) / 100;
+    const d = Math.round((ground - z) * 100) / 100;
     const tag =
       Math.abs(d) < 0.02
         ? "ON GRADE"
         : d > 0
           ? `CUT ${d.toFixed(2)} m`
           : `FILL ${(-d).toFixed(2)} m`;
-    return `${tag} · ground ${fmtHeight(e)} · design ${fmtHeight(z)}`;
+    return `${tag} · ground ${fmtHeight(ground)} · design ${fmtHeight(z)}`;
   };
 
   /** Design summary for exports (GeoJSON properties, shapefile columns). */
   const summary = () => {
     if (!last || !w) return null;
+    const { spec, plane, fall } = last;
+    const flat = fall.slopePct < 0.005;
     return {
       design:
-        st.mode === "fit"
+        spec.mode === "fit"
           ? "natural fall"
-          : st.mode === "level"
+          : spec.mode === "level"
             ? "dead level"
             : "set slope",
-      designSlopePct: Math.round(last.fall.slopePct * 1000) / 1000,
-      designToward:
-        last.fall.slopePct < 0.005 ? null : compassPoint(last.fall.fallDeg),
+      designSlopePct: Math.round(fall.slopePct * 1000) / 1000,
+      designToward: flat ? null : compassPoint(fall.fallDeg),
+      /** Bearing of the fall, degrees clockwise from Lambert-93 grid north. */
+      designFallDeg: flat ? null : Math.round(fall.fallDeg * 10) / 10,
+      crossPct: spec.mode === "slope" ? spec.crossPct : null,
+      offsetCm: last.offsetCm,
+      /** The design passes through (x, y, z): Lambert-93 m, NGF-IGN69 m. */
+      designX: Math.round(plane.x0 * 100) / 100,
+      designY: Math.round(plane.y0 * 100) / 100,
+      designZ: Math.round(plane.z0 * 1000) / 1000,
       cutM3: Math.round(last.works.cutM3),
       fillM3: Math.round(last.works.fillM3),
-      ratioTarget: st.ratio,
+      ratioTarget: last.ratio,
     };
   };
 

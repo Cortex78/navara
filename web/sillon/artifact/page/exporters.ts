@@ -25,6 +25,14 @@ export type ExportField = {
     design: string;
     designSlopePct: number;
     designToward: string | null;
+    /** Degrees clockwise from Lambert-93 grid north; null when level. */
+    designFallDeg: number | null;
+    crossPct: number | null;
+    offsetCm: number;
+    /** A point of the design: Lambert-93 x, y and its NGF-IGN69 height. */
+    designX: number;
+    designY: number;
+    designZ: number;
     cutM3: number;
     fillM3: number;
     ratioTarget: number;
@@ -60,6 +68,13 @@ export const fieldsGeoJson = (fields: ExportField[]) =>
                 design: f.design.design,
                 design_slope_pct: f.design.designSlopePct,
                 design_falls_to: f.design.designToward,
+                design_fall_bearing_l93: f.design.designFallDeg,
+                design_cross_pct: f.design.crossPct,
+                design_offset_cm: f.design.offsetCm,
+                // The design plane passes through this point.
+                design_x_l93: f.design.designX,
+                design_y_l93: f.design.designY,
+                design_z_ngf69: f.design.designZ,
                 cut_m3: f.design.cutM3,
                 fill_m3: f.design.fillM3,
                 cut_fill_target: f.design.ratioTarget,
@@ -124,8 +139,15 @@ const DBF_FIELDS = [
   { name: "DESIGN", type: "C" as const, length: 14 },
   { name: "D_SLOPE", type: "N" as const, length: 8, decimals: 3 },
   { name: "D_TOWARD", type: "C" as const, length: 3 },
+  { name: "D_BRG_L93", type: "N" as const, length: 6, decimals: 1 },
+  { name: "D_CROSS", type: "N" as const, length: 8, decimals: 3 },
+  { name: "D_OFFS_CM", type: "N" as const, length: 5, decimals: 0 },
+  { name: "D_X_L93", type: "N" as const, length: 12, decimals: 2 },
+  { name: "D_Y_L93", type: "N" as const, length: 12, decimals: 2 },
+  { name: "D_Z_NGF69", type: "N" as const, length: 10, decimals: 3 },
   { name: "CUT_M3", type: "N" as const, length: 12, decimals: 0 },
   { name: "FILL_M3", type: "N" as const, length: 12, decimals: 0 },
+  { name: "CF_TARGET", type: "N" as const, length: 6, decimals: 2 },
 ];
 
 /**
@@ -146,8 +168,15 @@ export const fieldsShapefileZip = (fields: ExportField[], stem: string) => {
         f.design?.design ?? null,
         f.design?.designSlopePct ?? null,
         f.design?.designToward ?? null,
+        f.design?.designFallDeg ?? null,
+        f.design?.crossPct ?? null,
+        f.design?.offsetCm ?? null,
+        f.design?.designX ?? null,
+        f.design?.designY ?? null,
+        f.design?.designZ ?? null,
         f.design?.cutM3 ?? null,
         f.design?.fillM3 ?? null,
+        f.design?.ratioTarget ?? null,
       ],
     })),
   );

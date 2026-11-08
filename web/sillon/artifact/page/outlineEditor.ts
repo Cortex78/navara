@@ -69,6 +69,14 @@ export class OutlineEditor {
     this.opts.onFinish();
   };
 
+  /** Places a corner while drawing (the keyboard's way in); false when editing. */
+  addPoint(p: LngLat) {
+    if (!this.drawing) return false;
+    this.points.push({ lng: p.lng, lat: p.lat });
+    this.render();
+    return true;
+  }
+
   undo() {
     if (this.points.length === 0) return;
     this.points.pop();

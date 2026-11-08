@@ -179,17 +179,25 @@ picks the same modules up when its shell grows a field panel.
   DMS, L93 E/N), a link register (PACK · ACTIVE, LIVE · IDLE / ACTIVE /
   SEVERED). Full screen: native where the page may, otherwise an immersive
   layout; F toggles. The panel collapses to a spine.
-- Verified: TESTCOUNT unit tests, among them the analytic volumes of a field
+- Verified: 250 unit tests, among them the analytic volumes of a field
   tilted on both axes, the ratio solve, contours, the PNG encoder, the field
   grid round trip and the haul bound. Headless Chromium under the artifact CSP,
   desktop and phone, dark and light: the Camargue "Riz" basin (19.83 ha) gives
   15 136 m³ each way on its natural fall with a mean haul of at least 166 m;
-  dead level at 1.30 gives 18 912 / 14 548 m³; 0.15 % toward 120° at 1.30
-  holds 1.30; raising it 5 cm gives 1.11; 532 contour lines; a 125 kB cut
-  sheet. Live, on a Beauce field (15.25 ha, RGE ALTI® 1 m): 25 665 m³ each way
+  dead level at 1.30 gives 18 912 / 14 548 m³, balanced at that ratio with
+  4 364 m³ allowed for shrinkage; 0.15 % toward 120° at 1.30 holds 1.30;
+  raising it 5 cm leaves 11 485 m³ to bring in; 532 contour lines; a 125 kB
+  cut sheet. Live, on a Beauce field (15.25 ha, RGE ALTI® 1 m): 25 665 m³ each way
   on its natural fall and 54 352 m³ to dead level, against 25 681 / 25 641 and
-  54 345 m³ measured server-side at 0.5 m. The deployed Edge Function (v5)
+  54 345 m³ measured server-side at 0.5 m. The deployed Edge Function (v6)
   matches the local handlers: identical field statistics, identical grid.
+- Reviewed: an adversarial review in five dimensions (page integration, live
+  data, GAïa fidelity, accessibility, artifact contract), each finding
+  challenged by a second agent, confirmed 36 findings. All are fixed, among
+  them the balance read against the target ratio (shrinkage is not surplus),
+  the hand-set design kept when a field is measured again, the first
+  data-source switch, keyboard selection of a field at a centre mark, and
+  duotone shaded relief.
 - Carried to later sprints: ft and yd³ units and a printable cut sheet (S7),
   design surfaces other than planes (S5).
 

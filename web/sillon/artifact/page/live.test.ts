@@ -187,6 +187,16 @@ describe("LiveProxy.fieldGrid", () => {
   });
 });
 
+describe("describeMcpError", () => {
+  it("says how to retry a timeout where it happened", () => {
+    const err = { code: "server_unavailable" };
+    expect(describeMcpError(err)).toMatch(/Pan the map to try again/);
+    expect(describeMcpError(err, "Select the field again to retry.")).toBe(
+      "Supabase did not answer in time. Select the field again to retry.",
+    );
+  });
+});
+
 describe("describeEdgeError", () => {
   const raised = (body: string) =>
     `Failed to run sql query: ERROR:  P0001: ign-proxy HTTP 400: ${body}\nCONTEXT:  PL/pgSQL function sillon.edge(jsonb) line 17 at RAISE`;

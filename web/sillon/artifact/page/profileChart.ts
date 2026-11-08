@@ -1,5 +1,7 @@
 import type { ProfileSample } from "../../src/dem/profile";
 
+import { grouped, signedFixed } from "./units";
+
 const SVG = "http://www.w3.org/2000/svg";
 
 const el = <K extends keyof SVGElementTagNameMap>(
@@ -33,7 +35,7 @@ const decimals = (step: number) =>
   Math.max(0, Math.min(3, -Math.floor(Math.log10(step) + 1e-9)));
 
 export const formatDistance = (m: number) =>
-  m >= 2000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
+  m >= 2000 ? `${(m / 1000).toFixed(2)} km` : `${grouped(m, 0)} m`;
 
 /**
  * Draws an elevation profile as inline SVG in `host`, redrawn at the
@@ -91,7 +93,7 @@ export const drawProfileChart = (
         { x: m.left - 6, y: y(v) + 4, class: "tick", "text-anchor": "end" },
         svg,
       );
-      t.textContent = v.toFixed(yd);
+      t.textContent = signedFixed(v, yd);
     }
     const xt = ticks(0, length, Math.max(2, Math.floor(w / 90)));
     // The last tick gives way to the unit label at the right end.
@@ -104,7 +106,7 @@ export const drawProfileChart = (
       t.textContent =
         length >= 2000
           ? `${(v / 1000).toFixed(decimals(xt.step / 1000))}`
-          : `${v}`;
+          : grouped(v, 0);
     }
     const unit = el(
       "text",
@@ -178,7 +180,7 @@ export const drawProfileChart = (
       const right = px > m.left + w * 0.6;
       label.setAttribute("x", String(px + (right ? -6 : 6)));
       label.setAttribute("text-anchor", right ? "end" : "start");
-      label.textContent = `${formatDistance(s.d)} · ${ok ? `${s.h.toFixed(2)} m` : "no data"}`;
+      label.textContent = `${formatDistance(s.d)} · ${ok ? `${signedFixed(s.h, 2)} m` : "no data"}`;
       onHover(s);
     };
     hit.addEventListener("pointermove", (e) => show(at(e.clientX)));

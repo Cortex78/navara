@@ -233,6 +233,12 @@ export const handleProxy = async (
   return Object.fromEntries(keys.map((k: string, i) => [k, answers[i]]));
 };
 
+/**
+ * The mixed layer's source: LiDAR HD where flown, RGE ALTI elsewhere, as the
+ * profile names a line that crosses both.
+ */
+const MIXED_SOURCE = "LiDAR HD + RGE ALTI";
+
 /** Above this bounding-box area a field is measured at 1 m instead of 0.5 m. */
 const NATIVE_FIELD_M2 = 600_000;
 
@@ -270,12 +276,17 @@ export const handleField = async (coordinates: unknown) => {
       polygons,
     );
   // A LiDAR HD layer that fails outright (an outage of that layer alone)
-  // falls through to RGE ALTI like one with no heights here.
-  let surface = await measure(ELEVATION_LAYERS.lidarMntL93).catch(() => null);
+  // falls through to the mixed layer like one with few heights here.
+  let failed = false;
+  let surface = await measure(ELEVATION_LAYERS.lidarMntL93).catch(() => {
+    failed = true;
+    return null;
+  });
   let source = "LiDAR HD";
   if (!surface || surface.nodataShare > 0.5) {
+    // Named for what the mixed layer gives here: LiDAR HD where flown.
+    source = !failed && !surface ? "RGE ALTI" : MIXED_SOURCE;
     surface = await measure(ELEVATION_LAYERS.lidarMntMixed);
-    source = "RGE ALTI";
   }
   return { ...surface, cellSize, source };
 };
@@ -411,8 +422,9 @@ const cropToField = (g: ElevationGrid, cells: Uint32Array): ElevationGrid => {
  * A field's height grid (GeoJSON Polygon or MultiPolygon coordinates), so
  * the page can run the cut/fill design itself: at the finest cell size that
  * keeps it within MAX_FIELD_GRID_CELLS, from LiDAR HD, or from the
- * gap-filled layer when LiDAR HD covers under half the field or fails to
- * load. Cropped to the
+ * gap-filled mixed layer when LiDAR HD covers under half the field or fails
+ * to load (labelled "RGE ALTI" only where LiDAR HD has no height at all).
+ * Cropped to the
  * field, NaN outside it; decoded by `decodeFieldGrid` in artifact/page/live.ts.
  */
 export const handleFieldGrid = async (
@@ -426,17 +438,21 @@ export const handleFieldGrid = async (
     );
   const load = (layer: string) =>
     loadElevationGrid({ bbox, cellSize, layer, retries: 1 });
-  // A LiDAR HD layer that fails outright falls through to RGE ALTI too.
+  // A LiDAR HD layer that fails outright falls through to the mixed layer.
   const lidar = await load(ELEVATION_LAYERS.lidarMntL93).catch(() => null);
+  let source = MIXED_SOURCE;
   if (lidar) {
     const cells = maskGridCells(lidar, polygons);
-    if (2 * heightCount(lidar, cells) >= cells.length)
+    const n = heightCount(lidar, cells);
+    if (2 * n >= cells.length)
       return encodeFieldGrid(cropToField(lidar, cells), "LiDAR HD");
+    // Not flown here at all: the mixed layer is RGE ALTI throughout.
+    if (n === 0) source = "RGE ALTI";
   }
   const grid = await load(ELEVATION_LAYERS.lidarMntMixed);
   return encodeFieldGrid(
     cropToField(grid, maskGridCells(grid, polygons)),
-    "RGE ALTI",
+    source,
   );
 };
 

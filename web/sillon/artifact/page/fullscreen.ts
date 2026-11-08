@@ -30,23 +30,30 @@ const exitNative = async () => {
   return doc.webkitExitFullscreen?.();
 };
 
+const visible = (el: HTMLElement) => el.offsetParent !== null;
+
 /**
- * Wires `buttons` (the panel's and the map's) to toggle full screen.
- * `onChange` runs after every switch so the map can resize to its new box.
+ * Wires the top bar's toggle and the map's exit button (shown in immersive
+ * mode, where the top bar is hidden) to full screen. The toggle keeps its
+ * label and says its state with aria-pressed; the exit button is a plain
+ * action. `onChange` runs after every switch so the map can resize.
  */
 export const installFullscreen = (
-  buttons: HTMLButtonElement[],
+  toggleButton: HTMLButtonElement,
+  exitButton: HTMLButtonElement,
   onChange: (mode: ScreenMode) => void,
 ) => {
   let mode: ScreenMode = null;
 
   const render = () => {
+    const had = document.activeElement;
     document.body.classList.toggle("immersive", mode === "immersive");
-    for (const b of buttons) {
-      b.setAttribute("aria-pressed", String(mode !== null));
-      b.title = mode ? "Exit full screen (F)" : "Full screen (F)";
-      const label = b.querySelector<HTMLElement>("[data-label]");
-      if (label) label.textContent = mode ? "Exit" : "Full screen";
+    toggleButton.setAttribute("aria-pressed", String(mode !== null));
+    toggleButton.title = mode ? "Exit full screen (F)" : "Full screen (F)";
+    // Focus on a button the switch just hid goes to the one now shown.
+    if (had === toggleButton || had === exitButton) {
+      const next = [toggleButton, exitButton].find(visible);
+      if (next && next !== had && !visible(had as HTMLElement)) next.focus();
     }
     onChange(mode);
   };
@@ -87,7 +94,8 @@ export const installFullscreen = (
   document.addEventListener("fullscreenchange", onNativeChange);
   document.addEventListener("webkitfullscreenchange", onNativeChange);
 
-  for (const b of buttons) b.addEventListener("click", () => void toggle());
+  for (const b of [toggleButton, exitButton])
+    b.addEventListener("click", () => void toggle());
 
   document.addEventListener("keydown", (e) => {
     const target = e.target as HTMLElement | null;

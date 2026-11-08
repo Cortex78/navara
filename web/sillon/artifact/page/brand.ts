@@ -104,11 +104,28 @@ const DUOTONE_LUT = (() => {
   return lut;
 })();
 
+/** The duotone colour of a luma 0..255, into `out` at `at` (RGB). */
+export const duotoneInto = (
+  luma: number,
+  out: Uint8Array | Uint8ClampedArray,
+  at: number,
+) => {
+  const k = Math.max(0, Math.min(255, Math.round(luma))) * 3;
+  out[at] = DUOTONE_LUT[k];
+  out[at + 1] = DUOTONE_LUT[k + 1];
+  out[at + 2] = DUOTONE_LUT[k + 2];
+};
+
 /**
  * Grades an image tile to the GAïa duotone: BT.709 luma mapped through
  * indigo-black → ultramarine → bone (the brand's asset grading function).
+ * JPEG for photographs; PNG keeps the tile's transparency (IGN's shaded
+ * relief is clear where it has no data).
  */
-export const duotoneTile = async (bytes: ArrayBuffer): Promise<ArrayBuffer> => {
+export const duotoneTile = async (
+  bytes: ArrayBuffer,
+  type: "image/jpeg" | "image/png" = "image/jpeg",
+): Promise<ArrayBuffer> => {
   const bitmap = await createImageBitmap(new Blob([bytes]));
   const { width, height } = bitmap;
   const canvas = new OffscreenCanvas(width, height);
@@ -129,9 +146,8 @@ export const duotoneTile = async (bytes: ArrayBuffer): Promise<ArrayBuffer> => {
     d[i + 2] = DUOTONE_LUT[k + 2];
   }
   ctx.putImageData(img, 0, 0);
-  const blob = await canvas.convertToBlob({
-    type: "image/jpeg",
-    quality: 0.88,
-  });
+  const blob = await canvas.convertToBlob(
+    type === "image/jpeg" ? { type, quality: 0.88 } : { type },
+  );
   return blob.arrayBuffer();
 };
