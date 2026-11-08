@@ -39,6 +39,16 @@ driveway designer). It uses its own name, code and look, and swaps USGS 3DEP for
 - Quantities: cut / fill (compacted) / fill hauled (+25 %) / surplus dirt / rock tons / 20-ton loads / footprint.
 - Exports: Shapefile (WGS84 lines for Ops Center), KML, DXF (3D polylines, UTM), LandXML (alignments, profiles, design surface), GeoJSON. Guidance options: centerline, driving edges, shoulder edges, offset passes, pass spacing, run-in/run-out.
 
+**The wider tool family** (senterfarms.com/programs lists 30 browser tools; these are the ones that bear on Sillon)
+
+| Tool                        | What it does                                                                                           | Sillon counterpart                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Elevation (South Shelton)   | 3D terrain with yield draped on it, sinks, flow simulation and ponding                                 | S4, S6; yield drape in S10                                                 |
+| SiteRX yard planner         | LiDAR ground plus satellite, trace what stands, roads and loops, drainage, staking file for Ops Center | S5 (paths), S7 (exports)                                                   |
+| Two-date drone comparison   | Two flights a year apart, aligned, with a swipe lever                                                  | IGN orthophotos by year (`ORTHOIMAGERY.ORTHOPHOTOS20xx`) with a swipe, S10 |
+| One-foot yield, Rx grid map | Yield, height and loss layers; 895 prescription zones with seed rate, CEC, soil, P, K, lime            | S10                                                                        |
+| Soil map, SkyRX radar       | Soil series by field; NEXRAD with rainfall totals and field boundaries                                 | S10 (soil maps, Météo-France radar as rain input to S6)                    |
+
 ### 1.2 Source data mapped from the US to France
 
 | Reference (US)                | Sillon (France), verified against the live Géoplateforme                                                                                                    |
@@ -157,7 +167,14 @@ The IGN data layer and a Navara map shell.
 - Rice basin flooding (levee heights, water depth), furrow/flood run lengths, pivot fit.
 - Earthmoving: mass-haul assignment (cut → fill transport problem), haul distances, scraper loads, hours, € cost per ha.
 
-### S10 — Hardening
+### S10 — Farm data layers
+
+- Yield maps (CSV/Shapefile from the combine) draped on terrain and checked against ponding.
+- Prescription zones on a grid, with soil attributes.
+- Orthophoto history by year with a swipe comparison.
+- Soil maps; Météo-France radar rainfall as rain-simulation input.
+
+### S11 — Hardening
 
 - Hot kernels moved to Rust/WASM inside the Navara workspace where the profile justifies it.
 - PWA offline packs; validation against RTK survey shots; e2e scenarios in CI; user and developer docs.
