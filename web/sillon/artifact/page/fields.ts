@@ -6,9 +6,15 @@ import maplibregl, {
 } from "maplibre-gl";
 
 import { fieldWindow, type FieldWindow } from "../../src/dem/design";
-import { sampleGrid, type ElevationGrid } from "../../src/dem/elevationGrid";
+import {
+  alignGrid,
+  lambert93Envelope,
+  sampleGrid,
+  type ElevationGrid,
+} from "../../src/dem/elevationGrid";
 import {
   fieldSurface,
+  maskGridCells,
   type FieldSurface,
   type LngLatPolygon,
 } from "../../src/dem/fieldMask";
@@ -365,6 +371,13 @@ type CurrentField = {
   declaredHa: number | null;
   stats: Stats | null;
   note: string;
+  /**
+   * Which field the design panel's hand-set values belong to: kept when the
+   * same field is measured again (an edited outline keeps it), new otherwise.
+   */
+  designKey: number;
+  /** The last live measurement failed: the card offers to try again. */
+  failed: boolean;
 };
 
 export type WorkbenchContext = {
@@ -431,6 +444,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     drawerCsv: $<HTMLButtonElement>("drawer-csv"),
     drawerClose: $<HTMLButtonElement>("drawer-close"),
     chart: $("chart"),
+    retry: $<HTMLButtonElement>("field-retry"),
     copybox: $("copybox"),
     copyboxTitle: $("copybox-title"),
     copyboxText: $<HTMLTextAreaElement>("copybox-text"),
@@ -487,13 +501,16 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     ui.copyboxTitle.textContent = filename;
     ui.copyboxText.value = text;
     ui.copybox.hidden = false;
-    ui.copyboxText.focus();
+    ui.copyboxText.focus({ preventScroll: true });
     ui.copyboxText.select();
   };
   const closeCopyBox = () => {
+    if (ui.copybox.hidden) return;
+    const hadFocus = ui.copybox.contains(document.activeElement);
     ui.copybox.hidden = true;
     ui.copyboxText.value = "";
-    if (copyOpener?.isConnected && copyOpener.offsetParent) copyOpener.focus();
+    if (hadFocus && copyOpener?.isConnected && copyOpener.offsetParent)
+      copyOpener.focus({ preventScroll: true });
     copyOpener = null;
   };
   ui.copyboxClose.addEventListener("click", closeCopyBox);
@@ -582,6 +599,10 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     if (!tag) {
       const el = document.createElement("div");
       el.className = "gx-tag";
+      // A visual echo of the card; MapLibre would make it a "Map marker" button.
+      el.setAttribute("aria-hidden", "true");
+      el.setAttribute("role", "presentation");
+      el.setAttribute("aria-label", "");
       tag = new maplibregl.Marker({ element: el, anchor: "bottom-left" });
     }
     tag.getElement().textContent = technicalCaps(
@@ -685,6 +706,7 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
         ? ` · ${Math.round(s.nodataShare * 100)} % of the field has no LiDAR value`
         : "";
     ui.note.textContent = `${f.note}${gaps}`;
+    ui.retry.hidden = !f.failed;
     ui.fit.disabled = !s;
     const level = !s?.plane || s.slopePct < 0.02;
     ui.fall.disabled = !s;
@@ -738,17 +760,33 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     };
   };
 
-  /** `keepDesign` when the same field is measured again (source, outline). */
-  const measure = (keepDesign = false) => {
+  const RETRY = "Use Try again on the field card.";
+
+  /** True when some design-grid cell centre falls inside the field. */
+  const holdsACell = (f: CurrentField, cellSize: number) => {
+    const polys = polygonsOf(f.geometry);
+    // The lattice the Edge Function cuts the field from (fieldOutline).
+    const lattice: ElevationGrid = {
+      crs: "EPSG:2154",
+      layer: "",
+      cellSize,
+      ...alignGrid(lambert93Envelope(polys.flat(2)), cellSize),
+      data: new Float32Array(0),
+    };
+    return maskGridCells(lattice, polys).length > 0;
+  };
+
+  const measure = () => {
     const f = current;
     if (!f) return;
     const seq = ++measureSeq;
+    f.failed = false;
     if (ctx.source() === "pack") {
       Object.assign(f, measurePack(f));
       renderCard();
       drawFall();
       const { w, note } = packWindow(f);
-      surface.setField(w, note, keepDesign);
+      surface.setField(w, note, f.designKey);
       return;
     }
     const live = ctx.live();
@@ -766,20 +804,22 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
           surface.setField(
             w,
             `${grid.source}, ${grid.cellSize} m design grid`,
-            keepDesign,
+            f.designKey,
           );
         else
+          // An empty answer is a field too small to hold a cell centre, or
+          // one IGN has no heights for: the lattice tells them apart.
           surface.message(
-            grid.width === 0 || grid.height === 0
+            holdsACell(f, grid.cellSize)
               ? "IGN has no heights for this field: neither LiDAR HD nor RGE ALTI® covers it."
               : "The field is smaller than one cell of the design grid.",
           );
       })
       .catch((err) => {
-        if (seq === measureSeq && current === f)
-          surface.message(
-            describeMcpError(err, "Select the field again to retry."),
-          );
+        if (seq !== measureSeq || current !== f) return;
+        f.failed = true;
+        surface.message(describeMcpError(err, RETRY));
+        renderCard();
       });
     track(live.field(f.geometry.coordinates))
       .then((s) => {
@@ -795,28 +835,46 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
       })
       .catch((err) => {
         if (seq !== measureSeq || current !== f) return;
-        f.note = describeMcpError(err, "Select the field again to retry.");
+        f.failed = true;
+        f.note = describeMcpError(err, RETRY);
         renderCard();
       });
   };
 
+  let designSeq = 0;
+  /** `keepDesign` for the same field with a new outline: its design stays. */
   const showField = (
-    field: Omit<CurrentField, "stats" | "note" | "dirty"> & { dirty?: boolean },
+    field: Omit<
+      CurrentField,
+      "stats" | "note" | "dirty" | "designKey" | "failed"
+    > & { dirty?: boolean; designKey?: number },
     fit = false,
     keepDesign = false,
   ) => {
-    current = { ...field, dirty: field.dirty ?? false, stats: null, note: "" };
+    closeCopyBox();
+    current = {
+      ...field,
+      dirty: field.dirty ?? false,
+      stats: null,
+      note: "",
+      failed: false,
+      designKey:
+        keepDesign && field.designKey !== undefined
+          ? field.designKey
+          : ++designSeq,
+    };
     setOverlay("current", [
       { type: "Feature", properties: {}, geometry: field.geometry },
     ]);
     setOverlay("fall", []);
     drawTarget(current);
     if (fit) fitTo(field.ring);
-    measure(keepDesign);
+    measure();
     renderMine();
   };
 
   const clearField = () => {
+    closeCopyBox();
     current = null;
     measureSeq++;
     setOverlay("current", []);
@@ -1093,13 +1151,14 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     const hadFocus = ui.drawer.contains(document.activeElement);
     ui.drawer.hidden = true;
     if (hadFocus && profileOpener?.isConnected && profileOpener.offsetParent)
-      profileOpener.focus();
+      profileOpener.focus({ preventScroll: true });
     profileOpener = null;
     document.body.classList.remove("profile-open");
     setOverlay("profile", []);
     setOverlay("cursor", []);
   };
   ui.drawerClose.addEventListener("click", closeProfile);
+  ui.retry.addEventListener("click", () => measure());
   ui.drawerCsv.addEventListener("click", () => {
     if (profileSamples.length)
       void offerFile(`profile-${stamp()}.csv`, profileCsv(profileSamples));
@@ -1406,19 +1465,14 @@ export const installWorkbench = (ctx: WorkbenchContext) => {
     /** Cut or fill under the cursor when a design is on, for the readout. */
     describeAt: (p: LngLat) => surface.describeAt(p),
     isEditing: () => editor !== null,
-    /** A corner at `p` while drawing: the keyboard's click on the map. */
-    addCorner: (p: LngLat) => {
-      if (editor?.addPoint(p)) return;
-      ctx.setStatus(
-        "Corners are moved by dragging while an outline is edited.",
-        "info",
-      );
-    },
+    /** A corner at `p` while drawing (the keyboard's click): the count, or null. */
+    addCorner: (p: LngLat) =>
+      editor?.addPoint(p) ? editor.points.length : null,
     /** The data source changed: drop what was measured on the old one. */
     onSourceChange: () => {
       cancelEditor();
       closeProfile();
-      if (current) measure(true);
+      if (current) measure();
     },
   };
 };

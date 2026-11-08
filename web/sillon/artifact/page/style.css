@@ -37,6 +37,9 @@
   --veil: rgb(2 2 12 / 0.78);
   --shadow: 0 14px 44px rgb(0 0 0 / 0.6);
   --icon-filter: invert(0.9) sepia(0.15);
+  /* MapLibre's attribution "i", drawn in the theme's ink: a filter on the
+     button would tint its focus ring too. */
+  --attrib-icon: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath fill='%23ece8dc' d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E");
   --reticle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='25' height='25'%3E%3Cg stroke='%23060618' stroke-width='3' opacity='.75'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Cg stroke='%23dce3f2' stroke-width='1'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Ccircle cx='12.5' cy='12.5' r='1.6' fill='%23dce3f2'/%3E%3C/svg%3E")
     12 12;
   --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
@@ -81,6 +84,7 @@
     --veil: rgb(227 222 207 / 0.8);
     --shadow: 0 12px 34px rgb(11 11 46 / 0.18);
     --icon-filter: none;
+    --attrib-icon: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath fill='%232e2e4a' d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E");
     --reticle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='25' height='25'%3E%3Cg stroke='%23ece8dc' stroke-width='3' opacity='.85'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Cg stroke='%23101030' stroke-width='1'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Ccircle cx='12.5' cy='12.5' r='1.6' fill='%23101030'/%3E%3C/svg%3E")
       12 12;
     color-scheme: light;
@@ -120,6 +124,7 @@
   --veil: rgb(227 222 207 / 0.8);
   --shadow: 0 12px 34px rgb(11 11 46 / 0.18);
   --icon-filter: none;
+  --attrib-icon: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath fill='%232e2e4a' d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E");
   --reticle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='25' height='25'%3E%3Cg stroke='%23ece8dc' stroke-width='3' opacity='.85'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Cg stroke='%23101030' stroke-width='1'%3E%3Cpath d='M12.5 1v7M12.5 17v7M1 12.5h7M17 12.5h7'/%3E%3C/g%3E%3Ccircle cx='12.5' cy='12.5' r='1.6' fill='%23101030'/%3E%3C/svg%3E")
     12 12;
   color-scheme: light;
@@ -708,6 +713,7 @@ input[type="range"] {
    added with its message is announced unreliably), but takes no room. */
 .gx-statusline:empty,
 .gx-hint[role="status"]:empty {
+  display: block;
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1419,7 +1425,8 @@ body.panel-off .gx-spine {
 }
 
 .maplibregl-ctrl-attrib-button {
-  filter: var(--icon-filter);
+  background-color: transparent !important;
+  background-image: var(--attrib-icon) !important;
 }
 
 /* Field corners while drawing: square marks in signal light, numbered. */
@@ -1489,6 +1496,10 @@ body.immersive .gx-exit {
   top: max(12px, env(safe-area-inset-top, 0px));
   right: calc(52px + env(safe-area-inset-right, 0px));
   z-index: 5;
+  background: var(--deck-glass);
+  border-color: var(--signal);
+  color: var(--ink);
+  box-shadow: 0 0 10px var(--signal-glow);
 }
 
 /* ── Responsive: hide by priority, then the phone sheet ──────────────── */
@@ -1702,7 +1713,7 @@ body.immersive .gx-exit {
 #map:has(.maplibregl-canvas:focus-visible)::after {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: 0 0 var(--sheet-cover, 0px);
   z-index: 3;
   pointer-events: none;
   border: 2px solid var(--signal);
@@ -1768,6 +1779,11 @@ body.immersive .gx-exit {
 }
 
 /* Where nothing can be saved: the text, selected, to copy by hand. */
+.gx-drawer,
+.gx-copybox {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .gx-copybox {
   position: absolute;
   top: 12px;

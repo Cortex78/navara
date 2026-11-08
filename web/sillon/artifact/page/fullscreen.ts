@@ -53,7 +53,8 @@ export const installFullscreen = (
     // Focus on a button the switch just hid goes to the one now shown.
     if (had === toggleButton || had === exitButton) {
       const next = [toggleButton, exitButton].find(visible);
-      if (next && next !== had && !visible(had as HTMLElement)) next.focus();
+      if (next && next !== had && !visible(had as HTMLElement))
+        next.focus({ preventScroll: true });
     }
     onChange(mode);
   };

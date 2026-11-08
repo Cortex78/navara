@@ -57,6 +57,9 @@ const MIN_DESIGN_CELLS = 12;
 /** Every n-th contour is drawn heavy. */
 const MAJOR_EVERY = 5;
 
+/** Within this of the design, ground counts as on grade (map, areas, readout). */
+const ON_GRADE_M = 0.02;
+
 /** Most contour labels on the map at once. */
 const MAX_LABELS = 24;
 
@@ -334,6 +337,10 @@ export const installSurface = (ctx: SurfaceContext) => {
 
   let w: FieldWindow | null = null;
   let fit: PlaneFit | null = null;
+  /** The field (its designKey) whose design the slope, offset… values are. */
+  let designOwner: number | undefined;
+  /** The viewer typed a fall, bearing or cross fall for that field. */
+  let slopeTouched = false;
   let last: SurfaceResult | null = null;
   /** About the field's grid (its source, coverage); set with the field. */
   let baseNote = "";
@@ -546,33 +553,58 @@ export const installSurface = (ctx: SurfaceContext) => {
   };
 
   let labels: maplibregl.Marker[] = [];
-  /** Each ground contour level, once, on its longest line, in m NGF-IGN69. */
+  /**
+   * Heights of the ground contours on the map (m NGF-IGN69): each level once,
+   * on its longest line, the heavy levels first, skipping any label that
+   * would overlap one already placed at this zoom.
+   */
   const drawLabels = () => {
     for (const m of labels) m.remove();
     labels = [];
     if (!st.showContours || !w) return;
-    const longest = new Map<number, GeoJSON.Position[]>();
+    const best = new Map<number, { c: GeoJSON.Position[]; major: boolean }>();
     for (const f of existContours) {
       if (f.geometry.type !== "LineString") continue;
       const level = Number(f.properties?.level);
       const c = f.geometry.coordinates;
-      if (c.length > (longest.get(level)?.length ?? 1)) longest.set(level, c);
+      if (c.length > (best.get(level)?.c.length ?? 1))
+        best.set(level, { c, major: !!f.properties?.major });
     }
-    const levels = [...longest.keys()].sort((a, b) => a - b);
-    // Too many levels to label each: every n-th, the heavy ones first.
-    const step = Math.ceil(levels.length / MAX_LABELS);
-    for (const [i, level] of levels.entries()) {
-      if (i % step !== 0) continue;
-      const c = longest.get(level) as GeoJSON.Position[];
-      const [lng, lat] = c[Math.floor(c.length / 2)];
-      const el = document.createElement("div");
-      el.className = "gx-clabel";
-      el.textContent = signedFixed(level, 2);
-      labels.push(
-        new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map),
-      );
+    const order = [...best.entries()].sort(
+      ([, a], [, b]) =>
+        Number(b.major) - Number(a.major) || b.c.length - a.c.length,
+    );
+    const placed: { x: number; y: number }[] = [];
+    for (const [level, { c }] of order) {
+      if (labels.length >= MAX_LABELS) break;
+      // Along the line until a free spot: the middle, then the quarters.
+      for (const along of [0.5, 0.25, 0.75]) {
+        const [lng, lat] = c[Math.floor((c.length - 1) * along)];
+        const p = map.project([lng, lat]);
+        if (
+          placed.some(
+            (q) => Math.abs(q.x - p.x) < 40 && Math.abs(q.y - p.y) < 16,
+          )
+        )
+          continue;
+        placed.push(p);
+        const el = document.createElement("div");
+        el.className = "gx-clabel";
+        el.textContent = signedFixed(level, 2);
+        // Visual only (the readout gives heights): not a "Map marker" button.
+        el.setAttribute("aria-hidden", "true");
+        el.setAttribute("role", "presentation");
+        el.setAttribute("aria-label", "");
+        labels.push(
+          new maplibregl.Marker({ element: el })
+            .setLngLat([lng, lat])
+            .addTo(map),
+        );
+        break;
+      }
     }
   };
+  map.on("zoomend", drawLabels);
 
   const pushContours = () => {
     data.contours = collection(
@@ -669,8 +701,11 @@ export const installSurface = (ctx: SurfaceContext) => {
     }
     const cs = style;
     const { maxM, bandM, onGradeM } = cs;
-    const pct = (d: number) => ((d + maxM) / (2 * maxM)) * 100;
-    const edges = [-maxM, 0, maxM];
+    // Past ±maxM the map paints one saturated colour: a cap at each end.
+    const cap = Math.max(bandM, maxM * 0.08);
+    const end = maxM + cap;
+    const pct = (d: number) => ((d + end) / (2 * end)) * 100;
+    const edges = [-end, -maxM, 0, maxM, end];
     if (onGradeM > 0) edges.push(-onGradeM, onGradeM);
     if (bandM > 0)
       for (let e = bandM; e < maxM - 1e-6; e += bandM) edges.push(e, -e);
@@ -698,17 +733,25 @@ export const installSurface = (ctx: SurfaceContext) => {
       "aria-label",
       `Cut and fill colours: fill on the left, deepest from ${m2(maxM)} m; on grade within ${Math.round(onGradeM * 100)} cm in the middle; cut on the right, deepest from ${m2(maxM)} m.`,
     );
-    // Class edges inside the bar, mirrored on both sides.
+    // Class edges inside the bar, mirrored on both sides; a bare mark
+    // where the saturated caps begin (their depth is in the end labels).
     const inner = legendStops(CUT_FILL_RAMP, cs)
       .map((t) => t.from)
       .filter((d) => d > onGradeM + 1e-6 && d < maxM - 1e-6);
     const ticks = document.createElement("div");
     ticks.className = "cf-ticks";
     ticks.setAttribute("aria-hidden", "true");
-    for (const d of [...inner.map((v) => -v), ...inner]) {
+    for (const [d, text] of [
+      ...inner.flatMap((v): [number, string][] => [
+        [-v, m2(v)],
+        [v, m2(v)],
+      ]),
+      [-maxM, ""],
+      [maxM, ""],
+    ] as [number, string][]) {
       const t = document.createElement("span");
       t.style.left = `${pct(d).toFixed(2)}%`;
-      t.textContent = m2(Math.abs(d));
+      t.textContent = text;
       ticks.append(t);
     }
     const scale = document.createElement("div");
@@ -736,7 +779,7 @@ export const installSurface = (ctx: SurfaceContext) => {
     style = {
       bandM: 0.05,
       maxM: autoMaxDepth(last.works.depth),
-      onGradeM: 0.02,
+      onGradeM: ON_GRADE_M,
       alpha: 1,
     };
     renderLegend();
@@ -886,6 +929,7 @@ export const installSurface = (ctx: SurfaceContext) => {
     const v = readNumber(ui.main, -10, 10);
     if (v === null) return;
     st.mainPct = v;
+    slopeTouched = true;
     schedule();
   });
   ui.bearing.addEventListener("input", () => {
@@ -893,12 +937,14 @@ export const installSurface = (ctx: SurfaceContext) => {
     if (v === null) return;
     st.bearingDeg = ((v % 360) + 360) % 360;
     ui.compass.textContent = compassPoint(st.bearingDeg);
+    slopeTouched = true;
     schedule();
   });
   ui.cross.addEventListener("input", () => {
     const v = readNumber(ui.cross, -10, 10);
     if (v === null) return;
     st.crossPct = v;
+    slopeTouched = true;
     schedule();
   });
   for (const el of [ui.main, ui.bearing, ui.cross])
@@ -908,6 +954,7 @@ export const installSurface = (ctx: SurfaceContext) => {
     st.mainPct = nat.pct;
     st.bearingDeg = nat.deg;
     st.crossPct = 0;
+    slopeTouched = false;
     syncInputs();
     schedule();
   });
@@ -965,8 +1012,14 @@ export const installSurface = (ctx: SurfaceContext) => {
         const d = designHeight(plane, x, y);
         const { lng, lat } = lambert93ToLngLat({ x, y });
         n++;
+        // Rounded first, so cut = existing − design as printed, never "-0.00".
+        const r = (v: number) => Number(v.toFixed(dp)) + 0;
+        const eR = r(e);
+        const dR = r(d);
+        const fmt = (v: number) =>
+          (Math.abs(v) < 10 ** -dp / 2 ? 0 : v).toFixed(dp);
         rows.push(
-          `${n},${x.toFixed(1)},${y.toFixed(1)},${lng.toFixed(7)},${lat.toFixed(7)},${e.toFixed(dp)},${d.toFixed(dp)},${(e - d).toFixed(dp)}`,
+          `${n},${x.toFixed(1)},${y.toFixed(1)},${lng.toFixed(7)},${lat.toFixed(7)},${fmt(eR)},${fmt(dR)},${fmt(r(eR - dR))}`,
         );
       }
     }
@@ -983,12 +1036,13 @@ export const installSurface = (ctx: SurfaceContext) => {
 
   // ── API ──
   /**
-   * Shows the design for a field window. `keep` when the same field was
-   * measured again (another data source, an edited outline): the slope,
-   * bearing, cross fall and offset the viewer set stay; a new field starts
-   * from its natural fall.
+   * Shows the design for a field window. `owner` names the field (fields.ts
+   * designKey): measured again (another data source, an edited outline), the
+   * same field keeps the offset and any slope the viewer typed, while an
+   * untouched slope follows the new grid's natural fall; any other field
+   * starts from its own natural fall.
    */
-  const setField = (window_: FieldWindow | null, why = "", keep = false) => {
+  const setField = (window_: FieldWindow | null, why = "", owner?: number) => {
     if (window_ && window_.validCount < MIN_DESIGN_CELLS) {
       message(
         ["Too few heights inside this field to design it.", why]
@@ -1032,13 +1086,18 @@ export const installSurface = (ctx: SurfaceContext) => {
         .join(" ");
     ui.sheetNote.textContent = `Stakes every ${stakeSpacing(w)} m · heights m NGF-IGN69 · cut +, fill − · from the ${w.grid.cellSize} m grid`;
     fit = robustFit(w);
+    const keep = owner !== undefined && owner === designOwner;
+    const nat = naturalFall();
     if (!keep) {
-      const nat = naturalFall();
-      st.mainPct = nat.pct;
-      st.bearingDeg = nat.deg;
       st.crossPct = 0;
       st.offsetCm = 0;
       ui.offset.value = "0";
+      slopeTouched = false;
+      designOwner = owner;
+    }
+    if (!slopeTouched) {
+      st.mainPct = nat.pct;
+      st.bearingDeg = nat.deg;
     }
     syncInputs();
     compute(true);
@@ -1084,16 +1143,18 @@ export const installSurface = (ctx: SurfaceContext) => {
     if (!w.inside[i]) return null;
     const e = sampleGrid(w.grid, { x, y });
     if (Number.isNaN(e)) return null;
-    // To the centimetre first, so the printed cut is ground − design exactly.
+    // On grade as the map and the areas decide it (raw depth); the figures
+    // to the centimetre, so the printed cut is ground − design exactly.
+    const raw = e - designHeight(last.plane, x, y);
     const ground = Math.round(e * 100) / 100;
     const z = Math.round(designHeight(last.plane, x, y) * 100) / 100;
     const d = Math.round((ground - z) * 100) / 100;
     const tag =
-      Math.abs(d) < 0.02
-        ? "ON GRADE"
-        : d > 0
-          ? `CUT ${d.toFixed(2)} m`
-          : `FILL ${(-d).toFixed(2)} m`;
+      Math.abs(raw) < ON_GRADE_M
+        ? `ON GRADE ±${ON_GRADE_M * 100} cm`
+        : raw > 0
+          ? `CUT ${Math.abs(d).toFixed(2)} m`
+          : `FILL ${Math.abs(d).toFixed(2)} m`;
     return `${tag} · ground ${fmtHeight(ground)} · design ${fmtHeight(z)}`;
   };
 

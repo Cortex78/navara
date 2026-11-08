@@ -108,6 +108,8 @@ const ui = {
   mode: $<HTMLSelectElement>("mode"),
   opacity: $<HTMLInputElement>("opacity"),
   opacityOut: $("opacity-out"),
+  mapLive: $("map-live"),
+  kbdMark: $("kbd-mark"),
   stretch: $<HTMLInputElement>("stretch"),
   stretchOut: $("stretch-out"),
   legend: $("legend"),
@@ -736,6 +738,12 @@ const getMcp = async (): Promise<McpLike | null> => {
   }
 };
 
+/** The phone layout: the panel is a bottom sheet over the map. */
+const narrow =
+  typeof matchMedia === "function"
+    ? matchMedia("(max-width: 700px)")
+    : ({ matches: false } as MediaQueryList);
+
 /** Touch screens have no hover: the readout follows a tap there. */
 const READOUT_IDLE =
   typeof matchMedia === "function" && matchMedia("(hover: none)").matches
@@ -782,7 +790,9 @@ const start = async () => {
     const off = document.body.classList.toggle("panel-off");
     ui.collapse.setAttribute("aria-expanded", String(!off));
     // The spine goes away with the panel back: keep focus on a control.
-    if (!off && document.activeElement === ui.spine) ui.collapse.focus();
+    if (!off && document.activeElement === ui.spine)
+      ui.collapse.focus({ preventScroll: true });
+    placeMark();
   };
   ui.collapse.addEventListener("click", togglePanel);
   ui.spine.addEventListener("click", togglePanel);
@@ -1192,19 +1202,26 @@ const start = async () => {
     state.mode = ui.mode.value as Mode;
     applyLayers(map);
   });
+  // The sliders say their unit from the start, not only once moved.
+  const sayOpacity = () =>
+    ui.opacity.setAttribute("aria-valuetext", `${ui.opacity.value} %`);
+  const sayStretch = () =>
+    ui.stretch.setAttribute(
+      "aria-valuetext",
+      `${ui.stretch.value} times the height`,
+    );
+  sayOpacity();
+  sayStretch();
   ui.opacity.addEventListener("input", () => {
     state.opacity = Number(ui.opacity.value) / 100;
     ui.opacityOut.textContent = `${ui.opacity.value} %`;
-    ui.opacity.setAttribute("aria-valuetext", `${ui.opacity.value} %`);
+    sayOpacity();
     applyLayers(map);
   });
   ui.stretch.addEventListener("input", () => {
     state.stretch = Number(ui.stretch.value);
     ui.stretchOut.textContent = `${ui.stretch.value}×`;
-    ui.stretch.setAttribute(
-      "aria-valuetext",
-      `${ui.stretch.value} times the height`,
-    );
+    sayStretch();
     map.setTerrain({ source: "terrain", exaggeration: state.stretch });
   });
   ui.fit.addEventListener("click", () => {
@@ -1244,35 +1261,78 @@ const start = async () => {
     "aria-label",
     "Map. Arrow keys move it, plus and minus zoom. Enter selects the farm field under the centre mark; while drawing, Space places a corner there and Enter finishes.",
   );
+  /** Said where it can be heard: the panel (and its status line) may be hidden. */
+  const announce = (text: string) => {
+    ui.mapLive.textContent = text;
+    setStatus(text, "info");
+  };
+  /**
+   * The mark's point, in map pixels: the middle of the map that can be seen,
+   * which on a phone stops at the bottom sheet.
+   */
+  const markPoint = () => {
+    const m = map.getContainer().getBoundingClientRect();
+    const sheet =
+      narrow.matches &&
+      !document.body.classList.contains("panel-off") &&
+      !document.body.classList.contains("immersive")
+        ? ui.panel.getBoundingClientRect().top
+        : m.bottom;
+    const bottom = Math.max(m.top + 40, Math.min(m.bottom, sheet));
+    return {
+      x: m.width / 2,
+      y: (bottom - m.top) / 2,
+      cover: m.bottom - bottom,
+    };
+  };
+  const placeMark = () => {
+    const p = markPoint();
+    ui.kbdMark.style.left = `${p.x}px`;
+    ui.kbdMark.style.top = `${p.y}px`;
+    // The map's focus frame stops where the sheet starts, too.
+    map.getContainer().style.setProperty("--sheet-cover", `${p.cover}px`);
+  };
+  canvas.addEventListener("focus", placeMark);
+  window.addEventListener("resize", placeMark);
   canvas.addEventListener("keydown", (e) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key !== "Enter" && e.key !== " ") return;
-    const c = map.getCenter();
+    placeMark();
+    const p = markPoint();
+    const c = map.unproject([p.x, p.y]);
     if (workbench.isEditing()) {
       // Enter finishes the outline (the drawing's own key handler).
       if (e.key === " ") {
         e.preventDefault();
-        workbench.addCorner({ lng: c.lng, lat: c.lat });
+        const n = workbench.addCorner({ lng: c.lng, lat: c.lat });
+        announce(
+          n === null
+            ? "Corners are moved by dragging while an outline is edited."
+            : `Corner ${n} placed.`,
+        );
       }
       return;
     }
     e.preventDefault();
     readout(c.lng, c.lat);
     if (map.getLayoutProperty("fields-hit", "visibility") === "none") {
-      setStatus("Farm fields are hidden: turn them on under Map.", "info");
+      announce("Farm fields are hidden: turn them on under Map.");
       return;
     }
-    const hit = map.queryRenderedFeatures(map.project(c), {
+    const hit = map.queryRenderedFeatures([p.x, p.y], {
       layers: ["fields-hit"],
     })[0];
     const fid = hit?.properties?.fid;
     const f = typeof fid === "number" ? fields.features[fid] : undefined;
-    if (f) workbench.selectRpg(f);
-    else
-      setStatus(
+    if (!f) {
+      announce(
         "No farm field under the centre mark. Move the map with the arrow keys, or draw a field.",
-        "info",
       );
+      return;
+    }
+    workbench.selectRpg(f);
+    const props = (f.properties ?? {}) as { crop?: string; ha?: number };
+    ui.mapLive.textContent = `Selected ${props.crop ?? "a field"}${typeof props.ha === "number" ? `, ${props.ha} ha declared` : ""}.`;
   });
 
   // ── RPG fields ──

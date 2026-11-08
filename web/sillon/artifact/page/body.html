@@ -45,11 +45,12 @@
 
   <main class="gx-stage" id="stage">
     <div id="map"></div>
-    <div class="gx-kbd-mark" aria-hidden="true"></div>
+    <div class="gx-kbd-mark" id="kbd-mark" aria-hidden="true"></div>
+    <p class="sr" id="map-live" role="status"></p>
 
     <div class="gx-boot" id="boot" role="status">
       <div class="gx-frame">
-        <p class="gx-boot-title">Acquiring LiDAR grid</p>
+        <p class="gx-boot-title">Acquiring <span class="u">LiDAR</span> grid</p>
         <p class="gx-boot-text">
           1 m IGN LiDAR HD terrain, orthophotos and farm fields of the Camargue
           pack.
@@ -124,6 +125,8 @@
         readonly
         rows="8"
         spellcheck="false"
+        aria-labelledby="copybox-title"
+        aria-describedby="copybox-note"
       ></textarea>
     </section>
 
@@ -150,8 +153,9 @@
   <aside class="gx-panel" id="panel" aria-label="Instrument panel">
     <div class="gx-panel-body" id="panel-body">
       <p class="gx-statusline" id="status" role="status">
-        Loading the LiDAR pack…
+        Loading the <span class="u">LiDAR</span> pack…
       </p>
+      <p class="sr" id="sd-live" role="status"></p>
 
       <details class="gx-sec" id="sec-field" open>
         <summary id="h-field">
@@ -202,6 +206,9 @@
             <p class="gx-crop" id="field-crop"></p>
             <dl class="gx-reg" id="field-stats"></dl>
             <p class="gx-hint" id="field-note"></p>
+            <button type="button" class="gx-btn" id="field-retry" hidden>
+              Try again
+            </button>
             <div class="gx-actions">
               <button type="button" class="gx-btn" id="field-fall">
                 Profile down the fall
@@ -350,7 +357,6 @@
           </div>
           <div class="gx-cf-legend" id="sd-legend"></div>
           <p class="gx-hint" id="sd-note" role="status"></p>
-          <p class="sr" id="sd-live" role="status"></p>
           <button type="button" class="gx-btn" id="sd-sheet">
             Cut sheet · CSV of stakes
           </button>
@@ -429,7 +435,7 @@
 
       <details class="gx-sec" id="sec-lidar" open>
         <summary id="h-lidar">
-          <span class="gx-sec-title">LiDAR</span
+          <span class="gx-sec-title"><span class="u">LiDAR</span></span
           ><span class="gx-sec-sub">Render</span
           ><span class="gx-cune" aria-hidden="true">𒌓</span>
         </summary>
