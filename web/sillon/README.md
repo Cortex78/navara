@@ -45,3 +45,26 @@ Products: `mnt` (LiDAR HD DTM, gap-filled with RGE ALTI®), `mnt-lidar` (LiDAR H
 
 IGN Géoplateforme (`data.geopf.fr`), Licence Ouverte / Etalab 2.0: LiDAR HD MNT/MNS, BD ORTHO®,
 RPG, geocoding. Esri World Imagery is offered as an alternative basemap under Esri's terms.
+
+## Artifact edition
+
+`artifact/` builds Sillon as a claude.ai artifact: a page that may only fetch
+its own files, run scripts from a few CDNs, and serve standard web file types.
+So it differs from the app above in three ways:
+
+- **Data is baked.** `bake.ts` fetches a field pack from the Géoplateforme:
+  the 1 m LiDAR HD grid over 3 × 3 km, a 20 m context grid over 24 km,
+  BD ORTHO®, infrared and IGN shaded-relief tiles, LiDAR HD metadata and RPG
+  fields. Binary parts are base64 in `.txt` files.
+- **MapLibre GL renders** (loaded from jsDelivr), since the Navara engine's
+  WebAssembly is larger than an artifact file may be.
+- **Tiles come from a `sillon://` protocol** instead of the service worker:
+  imagery from the pack's bundles, and terrain and hillshade generated in the
+  page from the LiDAR grid.
+
+```bash
+NODE_USE_ENV_PROXY=1 pnpm exec tsx artifact/bake.ts <outDir>
+pnpm exec tsx artifact/build.ts <outDir>
+```
+
+Then publish `<outDir>/index.html` with the other files in `<outDir>` beside it.

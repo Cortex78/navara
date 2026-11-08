@@ -62,6 +62,35 @@ export const lambert93ToLngLat = ({ x, y }: XY): LngLat => {
 };
 
 /**
+ * Projects every (lngs[i], lats[j]) pair of a lng/lat lattice; outputs are
+ * row-major with `lats` as rows. The conic's radius depends only on latitude
+ * and its angle only on longitude, so each is computed once per row or
+ * column — about 50× fewer transcendental calls than projecting each point,
+ * which matters when building elevation tiles in the browser.
+ */
+export const lngLatLatticeToLambert93 = (
+  lngs: ArrayLike<number>,
+  lats: ArrayLike<number>,
+) => {
+  const xs = new Float64Array(lngs.length * lats.length);
+  const ys = new Float64Array(xs.length);
+  const sin = Float64Array.from(lngs, (lng) =>
+    Math.sin(N * ((lng * Math.PI) / 180 - LNG0)),
+  );
+  const cos = Float64Array.from(lngs, (lng) =>
+    Math.cos(N * ((lng * Math.PI) / 180 - LNG0)),
+  );
+  for (let j = 0; j < lats.length; j++) {
+    const rho = AF * t((lats[j] * Math.PI) / 180) ** N;
+    for (let i = 0; i < lngs.length; i++) {
+      xs[j * lngs.length + i] = X0 + rho * sin[i];
+      ys[j * lngs.length + i] = Y0 + RHO0 - rho * cos[i];
+    }
+  }
+  return { xs, ys };
+};
+
+/**
  * Point scale factor of the projection at a latitude: a Lambert-93 metre
  * covers `1 / k` metres of ground. Within ±0.1 % over mainland France, so
  * grid areas and volumes are corrected with it rather than ignored.

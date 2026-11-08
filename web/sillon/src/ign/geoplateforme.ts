@@ -39,9 +39,9 @@ export const WMS_MAX_PIXELS = 5010;
  * Values at or below this are no-data. The Géoplateforme writes -9999 (and
  * -99999 on some products), and resampling to a coarser grid blends that
  * sentinel with real heights near coverage edges, giving values such as
- * -998.5. The lowest ground in France is about -10 m.
+ * -998.5 or -49.2. The lowest ground in France is about -10 m.
  */
-export const NODATA_THRESHOLD = -50;
+export const NODATA_THRESHOLD = -20;
 
 export type WmsGetMapParams = {
   layer: string;

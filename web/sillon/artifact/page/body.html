@@ -1,0 +1,129 @@
+<div id="map" aria-label="Map of the field pack"></div>
+
+<aside class="panel" id="panel">
+  <header class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <div>
+      <h1>Sillon</h1>
+      <p class="pack-name" id="pack-name">Camargue rice basins · LiDAR HD</p>
+    </div>
+    <button
+      type="button"
+      class="collapse"
+      id="collapse"
+      aria-expanded="true"
+      aria-controls="panel-body"
+      title="Collapse panel"
+    >
+      <span aria-hidden="true">–</span>
+    </button>
+  </header>
+
+  <div class="panel-body" id="panel-body">
+    <p class="status" id="status" role="status">Loading the LiDAR pack…</p>
+
+    <section aria-labelledby="h-map">
+      <h2 id="h-map">Map</h2>
+      <form class="row" id="goto-form">
+        <label class="sr" for="goto">Go to</label>
+        <input
+          id="goto"
+          type="search"
+          placeholder="43.585, 4.553 or 825500 6277500"
+          autocomplete="off"
+        />
+        <button type="submit" id="goto-go">Go</button>
+      </form>
+      <label class="field" for="imagery">
+        <span>Imagery</span>
+        <select id="imagery">
+          <option value="ortho">IGN orthophoto (BD ORTHO®)</option>
+          <option value="irc">IGN infrared colour</option>
+          <option value="none">None</option>
+        </select>
+      </label>
+      <div class="field" role="group" aria-label="View">
+        <span>View</span>
+        <div class="seg">
+          <button type="button" id="view-plan" class="on" aria-pressed="true">
+            Plan
+          </button>
+          <button type="button" id="view-3d" aria-pressed="false">3D</button>
+        </div>
+      </div>
+      <label class="check" for="fields-on">
+        <input type="checkbox" id="fields-on" checked />
+        <span>Farm fields (RPG) — click one to measure it</span>
+      </label>
+    </section>
+
+    <section aria-labelledby="h-lidar">
+      <h2 id="h-lidar">LiDAR</h2>
+      <label class="field" for="mode">
+        <span>Rendering</span>
+        <select id="mode">
+          <option value="relief">Elevation colour</option>
+          <option value="hillshade">Shaded relief</option>
+          <option value="ign-shade">IGN shaded relief</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
+      <label class="field" for="opacity">
+        <span>LiDAR</span><output id="opacity-out" for="opacity">70 %</output>
+        <input type="range" id="opacity" min="0" max="100" value="70" />
+      </label>
+      <label class="field" for="stretch">
+        <span>Height stretch</span
+        ><output id="stretch-out" for="stretch">1×</output>
+        <input type="range" id="stretch" min="1" max="30" value="1" />
+      </label>
+      <div class="legend" id="legend">
+        <div class="legend-head">
+          <span>Elevation, m NGF-IGN69</span>
+          <button type="button" class="link" id="fit">Fit to view</button>
+        </div>
+        <div class="ramp" id="ramp"></div>
+        <div class="legend-range">
+          <span id="range-min">–</span><span id="range-max">–</span>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-field">
+      <h2 id="h-field">Field</h2>
+      <div id="field-card" class="card" hidden>
+        <p class="crop" id="field-crop"></p>
+        <dl class="stats">
+          <dt>Area</dt>
+          <dd id="field-area"></dd>
+          <dt>Elevation</dt>
+          <dd id="field-range"></dd>
+          <dt>Relief</dt>
+          <dd id="field-relief"></dd>
+          <dt>Mean</dt>
+          <dd id="field-mean"></dd>
+        </dl>
+        <div class="row">
+          <button type="button" id="field-fit">Colour to this field</button>
+          <button type="button" id="field-clear">Clear</button>
+        </div>
+      </div>
+      <p class="hint" id="field-hint">
+        Click a field outline on the map to read its area and relief from the 1
+        m LiDAR grid.
+      </p>
+    </section>
+
+    <section aria-labelledby="h-data">
+      <h2 id="h-data">Data</h2>
+      <button type="button" class="primary" id="analyse">
+        Analyse the view
+      </button>
+      <pre class="grid-info" id="grid-info"></pre>
+      <p class="hint" id="pack-info"></p>
+    </section>
+  </div>
+</aside>
+
+<div class="readout" id="readout" hidden></div>
+<div class="badge" id="badge"></div>
